@@ -148,7 +148,6 @@ pub fn fetcher(problem_id: u32) -> Option<Problem> {
             if problem.paid_only {
                 return None;
             }
-            println!("problem = {:?}", problem);
             let client = reqwest::Client::new();
             let resp: ProblemResp = block_on(
                 block_on(
@@ -175,8 +174,10 @@ pub fn fetcher(problem_id: u32) -> Option<Problem> {
                 .replace("&quot;", "\"")
                 .replace("&#39;", "'")
                 .replace("&minus;", "-")
+                .replace("\r\n", "\n")
                 .replace("\n\n", "\n")
-                .replace("\n", "\n * ");
+                .replace("\n", "\n * ")
+                .replace("\r", "");
             return Some(Problem {
                 title: problem
                     .stat
@@ -237,8 +238,7 @@ fn test_re() {
 	<li><code>-10<sup>9</sup> <= nums[i] <= 10<sup>9</sup></code></li>
 	<li><code>-10<sup>9</sup> <= target <= 10<sup>9</sup></code></li>
 	<li><strong>Only one valid answer exists.</strong></li>
-</ul>
-
+</ul
 <p> </p>
 <strong>Follow-up: </strong>Can you come up with an algorithm that is less than <code>O(n<sup>2</sup>) </code>time complexity?
  *
@@ -250,6 +250,9 @@ fn test_re() {
         .replace("&nbsp;", " ")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
-        .replace("&minus;", "-");
+        .replace("&minus;", "-")
+        .replace("\r\n", "\n")
+        .replace("\n\n", "\n")
+        .replace("\n", "\n * ");
     assert_eq!(text, "");
 }

@@ -23,7 +23,6 @@ async fn main() {
         .expect("[1;31m\nFailed to read from command line\n [0m");
     let problem =
         fetcher(problem_id).unwrap_or_else(|| panic!("Failed to get problem #{}", problem_id));
-    println!("problem = {:?}", problem);
     add_todo_problem(&problem);
 }
 
