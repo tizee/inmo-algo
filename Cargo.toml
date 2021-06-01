@@ -1,0 +1,17 @@
+[package]
+name = "tizee_leetcode_rust"
+version = "0.0.1"
+authors = ["tizee <33030965+tizee@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+reqwest={version ="0.11.3", features= ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json="1.0"
+futures={version="0.3.15", features=["executor"]}
+tokio={version="1.6.1", features=["full"]}
+regex="1.5.4"
+
+[lib]
+test = true
