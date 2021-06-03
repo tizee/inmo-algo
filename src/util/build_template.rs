@@ -3,14 +3,15 @@ pub fn get_problem_links(slug_title: &str) -> (String, String) {
     (
         format!("https://leetcode.com/problems/{}/", slug_title),
         format!(
-            "https://leetcode.com/problems/{}/disucss/?currentPage=1&orderBy=most_votes",
+            "https://leetcode.com/problems/{}/discuss/?currentPage=1&orderBy=most_votes",
             slug_title
         ),
     )
 }
 
 pub fn get_template(problem: &Problem, template_file: &String) -> String {
-    let (problem_link, discussion_link) = get_problem_links(problem.title.clone().as_str());
+    let (problem_link, discussion_link) =
+        get_problem_links(problem.title.clone().replace("_", "-").as_str());
     let problem_boilerplate = &template_file
         .replace("TITLE", &problem.title)
         .replace("CONTENT", &problem.content)

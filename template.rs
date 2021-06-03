@@ -7,7 +7,7 @@
  *
  * */
 
-use crate::util::solution::Solution;
+struct Solution {}
 
 DEFAULT_CODE
 

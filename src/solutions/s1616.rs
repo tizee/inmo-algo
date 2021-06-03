@@ -1,4 +1,4 @@
-use crate::util::solution::Solution;
+struct Solution {}
 
 impl Solution {
     pub fn check_palindrome_formation(a: String, b: String) -> bool {
