@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 const GRAPHQL_API: &str = "https://leetcode.com/graphql";
-const PROBLEMS_API: &str = "https://leetcode.com/api/problems/algorithms";
+const PROBLEMS_API: &str = "https://leetcode.com/api/problems/algorithms/";
 const PROBLEM_QUERY: &str = r#"
 query questionData($titleSlug: String!) {
     question(titleSlug: $titleSlug) {
