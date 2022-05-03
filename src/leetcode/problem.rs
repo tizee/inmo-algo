@@ -100,6 +100,13 @@ pub struct LCRespData {
 /// LeetCode Problem detail
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LCQuestionDetail {
+    #[serde(rename = "questionId")]
+    pub question_id: Option<String>,
+    #[serde(rename = "questionFrontendId")]
+    pub question_frontend_id: String,
+    pub title: String,
+    #[serde(rename = "titleSlug")]
+    pub title_slug: String,
     pub content: String,
     #[serde(rename = "isPaidOnly")]
     pub is_paid_only: bool,

@@ -1,5 +1,7 @@
-use super::problem::{LCProblem, LCProblemResp, LCProblems, Problem};
+use super::problem::{LCProblem, LCProblemResp, LCProblems, LCQuestionDetail, Problem};
 use super::query::LeetCodeQuery;
+
+use indicatif::ProgressBar;
 
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -16,45 +18,35 @@ static PROBLEMS_API: &str = "https://leetcode.com/api/problems/algorithms/";
 pub struct LCFetcher;
 
 impl LCFetcher {
-    /// fetch leetcode problem with frontend problem id
-    pub async fn fetch(problem_id: u32, list: &Vec<LCProblem>) -> Result<Option<Problem>> {
-        for problem in list.iter() {
-            if problem.stat.frontend_question_id == problem_id {
-                if problem.paid_only {
-                    return Ok(None);
-                }
-                let client = reqwest::Client::new();
-                let resp = client
-                    .post(GRAPHQL_API)
-                    .json(&LeetCodeQuery::build_problem_query(
-                        problem.stat.question_title_slug.as_ref().unwrap(),
-                    ))
-                    .send()
-                    .await?
-                    .json::<LCProblemResp>()
-                    .await?;
-                let content = remove_http_tags(resp.data.question.content.as_str());
-                let content = remove_http_entities(content.as_str());
-                return Ok(Some(Problem {
-                    title: problem
-                        .stat
-                        .question_title_slug
-                        .clone()
-                        .unwrap()
-                        .replace('-', "_"),
-                    content,
-                    difficulty: Some(problem.difficulty.to_string()),
-                    question_id: problem.stat.frontend_question_id,
-                    code_snippets: resp.data.question.code_snippets,
-                    sample_test_case: resp.data.question.sample_test_case,
-                }));
-            }
-        }
-        Ok(None)
+    /// fetch leetcode problem with title slug
+
+    pub async fn download_problem(title_slug: String) -> Result<LCQuestionDetail> {
+        let pb = ProgressBar::new_spinner();
+        pb.enable_steady_tick(200);
+        pb.set_message(format!("Downloading problem {}....", title_slug));
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(GRAPHQL_API)
+            .json(&LeetCodeQuery::build_problem_query(title_slug.as_ref()))
+            .send()
+            .await?
+            .json::<LCProblemResp>()
+            .await?;
+        let mut question_detail = resp.data.question;
+        let content = remove_http_tags(question_detail.content.as_str());
+        let content = remove_http_entities(content.as_str());
+        question_detail.content = content;
+        pb.finish_with_message(format!("{} downloaded", title_slug));
+        Ok(question_detail)
     }
+
     /// download all problems
     pub async fn download_problems() -> Result<LCProblems> {
+        let pb = ProgressBar::new_spinner();
+        pb.enable_steady_tick(200);
+        pb.set_message("Downloading problem lists....");
         let resp = reqwest::get(PROBLEMS_API).await?;
+        pb.finish_with_message("lists downloaded");
         Ok(resp.json::<LCProblems>().await?)
     }
 }

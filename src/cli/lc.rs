@@ -1,7 +1,7 @@
-use crate::common::Lang;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
+use crate::common::Lang;
 use crate::config::Config;
 use crate::leetcode::LeetCode;
 

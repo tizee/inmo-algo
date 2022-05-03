@@ -23,6 +23,8 @@ use lazy_static::lazy_static;
 use problem::{LCProblem, Problem};
 use template::TemplateBuilder;
 
+use self::problem::LCQuestionDetail;
+
 pub struct ProblemEntry {
     pub id: u32,
     pub lang: Lang,
@@ -51,17 +53,54 @@ impl LeetCode {
         self.workspace.join("src").join("solutions")
     }
 
-    fn cache_file(&self) -> PathBuf {
+    fn cache_problem_list(&self) -> PathBuf {
         self.cache_dir.join("leetcode-problems")
+    }
+
+    fn cache_problem_dir(&self) -> PathBuf {
+        self.cache_dir.join("lc-problem")
+    }
+
+    fn cache_problem(&self, problem_id: u32) -> PathBuf {
+        self.cache_problem_dir().join(problem_id.to_string())
     }
 
     /// add problem to todo directory
     /// if the problem has been already added, then open solution template with $EDITOR
-    pub async fn add_todo(&self, problem_id: u32, lang: &Lang) -> Result<()> {
-        let list = self.get_problems().await?;
-        let res = LCFetcher::fetch(problem_id, &list).await?;
-        if let Some(problem) = res {
-            self.add_todo_problem(lang, &problem)?
+    pub async fn add_todo(&self, front_problem_id: u32, lang: &Lang) -> Result<()> {
+        let cache_problem = self.cache_problem(front_problem_id);
+        let cache_problem_dir = self.cache_problem_dir();
+        if !cache_problem_dir.exists() {
+            fs::create_dir_all(cache_problem_dir)?;
+        }
+        let detail: Option<LCQuestionDetail>;
+        if cache_problem.exists() {
+            detail = Some(storage::Storage::load_data_from_file(cache_problem)?);
+        } else {
+            let list = self.get_problems().await?;
+            let problem = list
+                .iter()
+                .find(|&p| !p.paid_only && p.stat.frontend_question_id == front_problem_id);
+            if problem.is_some() {
+                let problem = problem.unwrap();
+                let title_slug = problem.stat.question_title_slug.clone().unwrap();
+                let resp = LCFetcher::download_problem(title_slug).await?;
+                storage::Storage::persist(cache_problem, &resp)?;
+                detail = Some(resp);
+            } else {
+                detail = None;
+            }
+        }
+        if let Some(question_detail) = detail {
+            let problem = Problem {
+                title: question_detail.title_slug,
+                content: question_detail.content,
+                difficulty: question_detail.difficulty,
+                question_id: question_detail.question_frontend_id.parse().unwrap(),
+                code_snippets: question_detail.code_snippets,
+                sample_test_case: question_detail.sample_test_case,
+            };
+            return self.add_todo_problem(lang, &problem);
         }
         Ok(())
     }
@@ -159,7 +198,7 @@ impl LeetCode {
 
     /// update every week since LeetCode add new problems every week.
     async fn get_problems(&self) -> Result<Vec<LCProblem>> {
-        let cache_file = self.cache_file();
+        let cache_file = self.cache_problem_list();
         if cache_file.exists() {
             lazy_static! {
                 static ref HOUR: u64 = 60 * 60;
@@ -171,7 +210,7 @@ impl LeetCode {
                 self.update_cache(&problems.stat_status_pairs)?;
                 Ok(problems.stat_status_pairs)
             } else {
-                storage::Storage::load_from_file(cache_file)
+                storage::Storage::load_data_from_file(cache_file)
             }
         } else {
             let problems = LCFetcher::download_problems().await?;
@@ -182,7 +221,7 @@ impl LeetCode {
     }
 
     fn is_cache_outdated(&self, limit: u64) -> bool {
-        let cache = self.cache_file();
+        let cache = self.cache_problem_list();
         if cache.exists() {
             // is older than one week?
             let metadata = fs::metadata(cache).unwrap();
@@ -205,13 +244,13 @@ impl LeetCode {
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir)?;
         }
-        let cache = self.cache_file();
+        let cache = self.cache_problem_list();
         storage::Storage::persist(cache, list)
     }
 
     /// clear downloaded cache
     pub fn clear_cache(&self) -> Result<()> {
-        let cache = self.cache_file();
+        let cache = self.cache_problem_list();
         if cache.exists() {
             fs::remove_file(cache).with_context(|| "failed to clear cache for Leetcode")?;
         }
