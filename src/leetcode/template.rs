@@ -89,10 +89,10 @@ struct Solution;
 DEFAULT_CODE
 
 #[cfg(test)]
-mod test_ID {
+mod test_pID {
     use super::*;
     #[test]
-    fn test_ID_TITLE() {}
+    fn test_ID() {}
 }
                     "
             .to_string(),
