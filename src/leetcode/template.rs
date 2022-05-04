@@ -57,13 +57,13 @@ CONTENT
 problem link: PROBLEM_LINK
 discussion link: DISCUSSION_LINK
                 ";
-            static ref PYTHON_FRONT_MATTER: &'static str = r#"""
+            static ref PYTHON_FRONT_MATTER: &'static str = r#""""
     TITLE
     CONTENT
 
     problem link: PROBLEM_LINK
     discussion link: DISCUSSION_LINK
-                """#;
+                """"#;
         }
         match lang {
             Lang::Rust => C_LIKE_FRONT_MATTER.to_string(),
