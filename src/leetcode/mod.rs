@@ -6,10 +6,15 @@ mod template;
 
 use anyhow::anyhow;
 use anyhow::{Context, Result};
+use rand::Rng;
+use regex::Regex;
+
+use std::fmt::Display;
 use std::fs;
 use std::io::BufRead;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::thread;
 use std::time::SystemTime;
 use std::{fs::File, io};
@@ -23,11 +28,17 @@ use lazy_static::lazy_static;
 use problem::{LCProblem, Problem};
 use template::TemplateBuilder;
 
-use self::problem::LCQuestionDetail;
+use self::problem::{LCEdge, LCQuestionDetail, LCQuestionTopicTag, LCTopicTag};
 
 pub struct ProblemEntry {
     pub id: u32,
     pub lang: Lang,
+}
+
+impl Display for ProblemEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("problem-id: {}\tlang: {}", self.id, self.lang))
+    }
 }
 
 pub struct LeetCode {
@@ -53,58 +64,41 @@ impl LeetCode {
         self.workspace.join("src").join("solutions")
     }
 
+    #[inline]
     fn cache_problem_list(&self) -> PathBuf {
         self.cache_dir.join("leetcode-problems")
     }
 
+    #[inline]
     fn cache_problem_dir(&self) -> PathBuf {
         self.cache_dir.join("lc-problem")
     }
 
+    #[inline]
     fn cache_problem(&self, problem_id: u32) -> PathBuf {
         self.cache_problem_dir().join(problem_id.to_string())
     }
 
+    #[inline]
+    fn cache_tags(&self) -> PathBuf {
+        self.cache_dir.join("lc-tags")
+    }
+
+    #[inline]
+    fn cache_tag_problems(&self, topic: &String) -> PathBuf {
+        self.cache_problem_dir().join(topic)
+    }
+
     /// add problem to todo directory
-    /// if the problem has been already added, then open solution template with $EDITOR
+    /// if the problem has been already added, then it's a no-op
     pub async fn add_todo(&self, front_problem_id: u32, lang: &Lang) -> Result<()> {
-        let cache_problem = self.cache_problem(front_problem_id);
-        let cache_problem_dir = self.cache_problem_dir();
-        if !cache_problem_dir.exists() {
-            fs::create_dir_all(cache_problem_dir)?;
-        }
-        let detail: Option<LCQuestionDetail>;
-        if cache_problem.exists() {
-            detail = Some(storage::Storage::load_data_from_file(cache_problem)?);
-        } else {
-            let list = self.get_problems().await?;
-            let problem = list
-                .iter()
-                .find(|&p| !p.paid_only && p.stat.frontend_question_id == front_problem_id);
-            if problem.is_some() {
-                let problem = problem.unwrap();
-                let title_slug = problem.stat.question_title_slug.clone().unwrap();
-                let resp = LCFetcher::download_problem(title_slug).await?;
-                storage::Storage::persist(cache_problem, &resp)?;
-                detail = Some(resp);
-            } else {
-                detail = None;
-            }
-        }
+        let detail = self.get_question_detail(front_problem_id).await?;
         if let Some(question_detail) = detail {
-            let problem = Problem {
-                title: question_detail.title_slug,
-                content: question_detail.content,
-                difficulty: question_detail.difficulty,
-                question_id: question_detail.question_frontend_id.parse().unwrap(),
-                code_snippets: question_detail.code_snippets,
-                sample_test_case: question_detail.sample_test_case,
-            };
+            let problem = question_detail.to_problem();
             return self.add_todo_problem(lang, &problem);
         }
         Ok(())
     }
-
     /// get list of todos from todos directory
     pub fn todos(&self) -> Result<Vec<ProblemEntry>> {
         self.get_problem_entries(self.todo_dir())
@@ -124,25 +118,35 @@ impl LeetCode {
                 .map(|entry| entry.unwrap().path())
                 .filter(|path| path.is_file())
                 .map_while(|path: PathBuf| -> Option<ProblemEntry> {
-                    let file_name = path.file_name().unwrap().to_str().unwrap();
-                    let _pairs = file_name.split_once('.').unwrap();
-                    let file_extension = path.file_stem().unwrap().to_str().unwrap();
-                    if file_name != file_extension {
-                        return Some(ProblemEntry {
-                            id: file_name.parse::<u32>().unwrap(),
-                            lang: Lang::from_extension(file_extension),
-                        });
+                    let fname = path.file_name().unwrap().to_str().unwrap();
+                    let pair = fname.split_once('.');
+                    if let Some(pair) = pair {
+                        let file_name = pair.0;
+                        let file_extension = pair.1;
+                        let id = &pair.0[1..];
+                        return match id.parse::<u32>() {
+                            Ok(id) => {
+                                if file_name != file_extension {
+                                    return Some(ProblemEntry {
+                                        id,
+                                        lang: Lang::from_extension(file_extension),
+                                    });
+                                }
+                                None
+                            }
+                            Err(_) => None,
+                        };
                     }
                     None
                 })
                 .collect();
             return Ok(list);
         }
-        Err(anyhow!("todos is not a directory"))
+        Err(anyhow!(format!("{} is not a directory", path.display())))
     }
 
     /// complete todo solution by moving it to solutions directory
-    pub fn solve_todo(&self, problem_id: u32, lang: Lang) -> Result<()> {
+    pub fn solve_todo(&self, problem_id: u32, lang: &Lang) -> Result<()> {
         let todo_dir = self.todo_dir();
         let solutions_dir = self.solved_dir();
         let file_name = padding_id(problem_id);
@@ -165,6 +169,12 @@ impl LeetCode {
                     return Ok(());
                 }
             }
+            println!(
+                "move {} to {}",
+                problem_file_path.display(),
+                solution_file_path.display()
+            );
+
             fs::rename(&problem_file_path, &solution_file_path).context(format!(
                 "failed to rename {} to {}",
                 problem_file_path.display(),
@@ -192,12 +202,42 @@ impl LeetCode {
                     .unwrap();
                 writeln!(solution_mod_file, "mod {};", file_name)?;
             }
+        } else {
+            eprintln!("{} doesn't exist!", problem_file_path.display());
         }
         Ok(())
     }
 
+    async fn get_question_detail(&self, front_problem_id: u32) -> Result<Option<LCQuestionDetail>> {
+        let cache_problem = self.cache_problem(front_problem_id);
+        let cache_problem_dir = self.cache_problem_dir();
+        if !cache_problem_dir.exists() {
+            fs::create_dir_all(cache_problem_dir)?;
+        }
+        let detail: Option<LCQuestionDetail>;
+        if cache_problem.exists() {
+            detail = Some(storage::Storage::load_data_from_file(cache_problem)?);
+        } else {
+            let list = self.get_questions().await?;
+            let problem = list
+                .iter()
+                .find(|&p| !p.paid_only && p.stat.frontend_question_id == front_problem_id);
+            if problem.is_some() {
+                let problem = problem.unwrap();
+                let title_slug = problem.stat.question_title_slug.clone().unwrap();
+                let resp = LCFetcher::download_problem(title_slug).await?;
+                storage::Storage::persist(cache_problem, &resp)?;
+                detail = Some(resp);
+            } else {
+                detail = None;
+            }
+        }
+        Ok(detail)
+    }
+
+    /// get list of all problems
     /// update every week since LeetCode add new problems every week.
-    async fn get_problems(&self) -> Result<Vec<LCProblem>> {
+    async fn get_questions(&self) -> Result<Vec<LCProblem>> {
         let cache_file = self.cache_problem_list();
         if cache_file.exists() {
             lazy_static! {
@@ -205,22 +245,22 @@ impl LeetCode {
                 static ref DAY: u64 = 60 * 60 * 24;
                 static ref WEEK: u64 = 7 * 60 * 60 * 24;
             };
-            if self.is_cache_outdated(*WEEK) {
+            if self.is_list_cache_outdated(*WEEK) {
                 let problems = LCFetcher::download_problems().await?;
-                self.update_cache(&problems.stat_status_pairs)?;
+                self.update_list_cache(&problems.stat_status_pairs)?;
                 Ok(problems.stat_status_pairs)
             } else {
                 storage::Storage::load_data_from_file(cache_file)
             }
         } else {
             let problems = LCFetcher::download_problems().await?;
-            self.update_cache(&problems.stat_status_pairs)
+            self.update_list_cache(&problems.stat_status_pairs)
                 .context("failed to update cache")?;
             Ok(problems.stat_status_pairs)
         }
     }
 
-    fn is_cache_outdated(&self, limit: u64) -> bool {
+    fn is_list_cache_outdated(&self, limit: u64) -> bool {
         let cache = self.cache_problem_list();
         if cache.exists() {
             // is older than one week?
@@ -239,7 +279,7 @@ impl LeetCode {
     }
 
     /// update downloaded cache
-    pub fn update_cache(&self, list: &Vec<LCProblem>) -> Result<()> {
+    pub fn update_list_cache(&self, list: &Vec<LCProblem>) -> Result<()> {
         let cache_dir = &self.cache_dir;
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir)?;
@@ -306,6 +346,129 @@ impl LeetCode {
         //     .spawn()
         //     .context("failed to open in $EDITOR")?;
         Ok(())
+    }
+
+    /// pick one question based on conditions
+    /// for the sake of simplicity, please use web UI instead for compliciated conditions
+    pub async fn pick_one(&self, query: SearchCondition) -> Result<()> {
+        // get all matches according to conditions
+        // we could reuse leetcode's query for avoiding searching locally
+        // but I want to do things the hard way
+        let problems = self.get_questions().await?;
+        let matches = if let Some(level) = query.level {
+            problems
+                .into_iter()
+                .filter(|p| p.difficulty.to_string().eq_ignore_ascii_case(&level))
+                .collect()
+        } else {
+            problems
+        };
+        if !matches.is_empty() {
+            let random_index: usize = rand::thread_rng().gen_range(0..=matches.len());
+            let question = &matches[random_index];
+            let question_detail = self
+                .get_question_detail(question.stat.frontend_question_id)
+                .await?;
+            if let Some(detail) = question_detail {
+                println!("pick {} {}", detail.question_frontend_id, detail.title_slug);
+                let problem = detail.to_problem();
+                return self.add_todo_problem(&query.lang, &problem);
+            }
+        } else {
+            eprintln!("There is no matched problem!");
+        }
+        Ok(())
+    }
+
+    /// get tags of a question
+    pub async fn get_question_tags(&self, question_id: u32) -> Result<Option<Vec<String>>> {
+        let question = self.get_question_detail(question_id).await?;
+        if let Some(detail) = question {
+            return Ok(Some(
+                detail.topic_tags.iter().map(|t| t.to_string()).collect(),
+            ));
+        }
+        Ok(None)
+    }
+
+    pub async fn get_all_tags(&self) -> Result<Vec<LCEdge<LCQuestionTopicTag>>> {
+        let cache_file = self.cache_tags();
+        if cache_file.exists() {
+            lazy_static! {
+                static ref HOUR: u64 = 60 * 60;
+                static ref DAY: u64 = 60 * 60 * 24;
+                static ref WEEK: u64 = 7 * 60 * 60 * 24;
+            };
+            if self.is_list_cache_outdated(*WEEK) {
+                let tags = LCFetcher::download_topic_list().await?;
+                storage::Storage::persist(cache_file, &tags)?;
+                Ok(tags)
+            } else {
+                storage::Storage::load_data_from_file(cache_file)
+            }
+        } else {
+            let tags = LCFetcher::download_topic_list().await?;
+            storage::Storage::persist(cache_file, &tags)?;
+            Ok(tags)
+        }
+    }
+
+    pub async fn get_problems_of_tag(&self, topic: &String) -> Result<LCTopicTag> {
+        let cache_file = self.cache_tag_problems(topic);
+        if cache_file.exists() {
+            lazy_static! {
+                static ref HOUR: u64 = 60 * 60;
+                static ref DAY: u64 = 60 * 60 * 24;
+                static ref WEEK: u64 = 7 * 60 * 60 * 24;
+            };
+            if self.is_list_cache_outdated(*WEEK) {
+                let problems = LCFetcher::download_tag_questions(topic).await?;
+                storage::Storage::persist(cache_file, &problems)?;
+                Ok(problems)
+            } else {
+                storage::Storage::load_data_from_file(cache_file)
+            }
+        } else {
+            let problems = LCFetcher::download_tag_questions(topic).await?;
+            storage::Storage::persist(cache_file, &problems)?;
+            Ok(problems)
+        }
+    }
+}
+
+pub struct SearchCondition {
+    /// langugage is required
+    pub lang: Lang,
+    pub level: Option<String>,
+}
+
+pub struct SearchConditionBuilder {
+    pub lang: Lang,
+    pub level: Option<String>,
+}
+
+impl SearchConditionBuilder {
+    pub fn new() -> Self {
+        SearchConditionBuilder {
+            lang: Lang::Rust,
+            level: None,
+        }
+    }
+    pub fn lang(&mut self, name: String) -> &mut Self {
+        self.lang = Lang::from_str(name.as_str()).unwrap();
+        self
+    }
+
+    pub fn level(&mut self, level: String) -> &mut Self {
+        self.level = Some(level);
+        self
+    }
+
+    pub fn build(&self) -> SearchCondition {
+        SearchCondition {
+            lang: self.lang.clone(),
+            level: self.level.clone(),
+        }
     }
 }
 

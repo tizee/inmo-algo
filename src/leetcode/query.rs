@@ -6,6 +6,7 @@ use std::fmt::Display;
 enum LeetCodeQueryType {
     QuestionData,
     QuestionTags,
+    TagQuestions,
 }
 
 impl Display for LeetCodeQueryType {
@@ -13,6 +14,7 @@ impl Display for LeetCodeQueryType {
         match &self {
             LeetCodeQueryType::QuestionData => f.write_str("questionData"),
             LeetCodeQueryType::QuestionTags => f.write_str("questionTags"),
+            LeetCodeQueryType::TagQuestions => f.write_str("getTopicTag"),
         }
     }
 }
@@ -25,6 +27,7 @@ pub struct LeetCodeQuery {
     query: String,
 }
 
+/// LeetCode graphql query
 impl LeetCodeQuery {
     pub fn build_problem_query(title_slug: &str) -> Self {
         lazy_static! {
@@ -129,6 +132,66 @@ query questionData($titleSlug: String!) {
             operation_name: LeetCodeQueryType::QuestionTags.to_string(),
             variables: json!({ "skipCompanyTags": true}),
             query: TAGS_QUERY.to_string(),
+        }
+    }
+
+    pub fn build_tag_questions_query(topic: &String) -> Self {
+        lazy_static! {
+            static ref TOPIC_TAG_QUERY: &'static str = r"
+    query getTopicTag($slug: String!) {
+      topicTag(slug: $slug) {
+        name
+        slug
+        questions {
+          status
+          questionId
+          questionFrontendId
+          title
+          titleSlug
+          stats
+          difficulty
+          isPaidOnly
+          topicTags {
+            name
+            slug
+          }
+          companyTags {
+            name
+            slug
+          }
+        }
+        frequencies
+      }
+      favoritesLists {
+        publicFavorites {
+          ...favoriteFields
+        }
+        privateFavorites {
+          ...favoriteFields
+        }
+      }
+    }
+
+    fragment favoriteFields on FavoriteNode {
+      idHash
+      id
+      name
+      isPublicFavorite
+      viewCount
+      creator
+      isWatched
+      questions {
+        questionId
+        title
+        titleSlug
+      }
+    }
+    ";
+        }
+        LeetCodeQuery {
+            operation_name: LeetCodeQueryType::TagQuestions.to_string(),
+            variables: json!({ "slug": topic }),
+            query: TOPIC_TAG_QUERY.to_string(),
         }
     }
 }

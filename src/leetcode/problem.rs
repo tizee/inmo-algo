@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,19 +85,23 @@ pub struct LCProblemStat {
     pub is_new_question: bool,
 }
 
-/// Problem detail response
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LCProblemResp {
-    pub data: LCRespData,
+/// generic response structure
+#[derive(Debug, Deserialize)]
+pub struct LCResp<T> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
+    pub data: T,
 }
+
+/// Problem detail response
+pub type LCProblemResp = LCResp<LCQuestionDetailData>;
 
 /// problem detail
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LCRespData {
+pub struct LCQuestionDetailData {
     pub question: LCQuestionDetail,
 }
 
-/// LeetCode Problem detail
+/// common LeetCode problem detail
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LCQuestionDetail {
     #[serde(rename = "questionId")]
@@ -107,17 +111,18 @@ pub struct LCQuestionDetail {
     pub title: String,
     #[serde(rename = "titleSlug")]
     pub title_slug: String,
-    pub content: String,
+    /// may omit in other structure
+    pub content: Option<String>,
     #[serde(rename = "isPaidOnly")]
     pub is_paid_only: bool,
     pub difficulty: Option<String>,
     pub stats: String,
     #[serde(rename = "codeSnippets")]
-    pub code_snippets: Vec<LCCodeSnippet>,
+    pub code_snippets: Option<Vec<LCCodeSnippet>>,
     #[serde(rename = "sampleTestCase")]
-    pub sample_test_case: String,
+    pub sample_test_case: Option<String>,
     #[serde(rename = "metaData")]
-    pub meta_data: String,
+    pub meta_data: Option<String>,
     #[serde(rename = "topicTags")]
     pub topic_tags: Vec<LCQuestionTopicTag>,
     /// string of json list, need deserialize one more time
@@ -139,7 +144,13 @@ pub struct LCQuestionTopicTag {
     pub slug: String,
 }
 
-///
+impl Display for LCQuestionTopicTag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.slug)
+    }
+}
+
+/// Problem used in cli
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Problem {
     pub title: String,
@@ -158,4 +169,64 @@ pub struct LCCodeSnippet {
     #[serde(rename = "langSlug")]
     pub lang_slug: String,
     pub code: String,
+}
+
+pub type LCTopicTagResp = LCResp<LCTopicTagData>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LCTopicTagData {
+    #[serde(rename = "topicTag")]
+    pub topic_tag: LCTopicTag,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LCTopicTag {
+    pub name: String,
+    pub slug: String,
+    pub questions: Vec<LCQuestionDetail>,
+}
+
+impl Display for LCQuestionDetail {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "Level: {}\t{}\t{}",
+            self.difficulty.as_ref().unwrap(),
+            self.question_frontend_id,
+            self.title_slug,
+        ))
+    }
+}
+
+impl LCQuestionDetail {
+    /// convert to Problem and move ownership
+    pub fn to_problem(self) -> Problem {
+        Problem {
+            title: self.title_slug,
+            content: self.content.unwrap(),
+            difficulty: self.difficulty,
+            question_id: self.question_frontend_id.parse().unwrap(),
+            code_snippets: self.code_snippets.unwrap(),
+            sample_test_case: self.sample_test_case.unwrap(),
+        }
+    }
+}
+
+pub type LCQuestionTopicTagsResp = LCResp<LCQuestionTopicTagsData>;
+
+#[derive(Debug, Deserialize)]
+pub struct LCQuestionTopicTagsData {
+    #[serde(rename = "questionTopicTags")]
+    pub question_topic_tags: LCEdges<LCQuestionTopicTag>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LCEdges<T> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
+    pub edges: Vec<LCEdge<T>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LCEdge<T> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
+    pub node: T,
 }
