@@ -6,6 +6,8 @@ Have fun coding ;)
 
 ## Features
 
+### Leetcode
+
 - [x] generate solution template for given languages
 - [x] pick one problem within conditions
 - [x] list problems by topic
@@ -13,16 +15,18 @@ Have fun coding ;)
 - [x] solve to-do solution of given langauge
 - [x] list local solutions
 - [x] list local todos
+- [x] open with $EDITOR
+
+### Configuration
+
+- [x] support config for leetcode dir
+- [x] support config for codeforeces dir
 
 ### Eye Candy
 
 - [x] Download spinner
 
 ## TODOs
-
-### Leetcode
-
-- [ ] open in $EDITOR
 
 ### Codeforces
 
@@ -31,13 +35,6 @@ WIP
 ### TUI
 
 WIP
-
-### Configuration
-
-WIP
-
-- [x] support config for leetcode dir
-- [x] support config for codeforeces dir
 
 ### Interactive finder
 

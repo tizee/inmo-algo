@@ -1,7 +1,7 @@
 use clap::ArgEnum;
 use std::{fmt::Display, str::FromStr, string::ParseError};
 
-#[derive(Debug, Clone, ArgEnum)]
+#[derive(Debug, Clone, PartialEq, ArgEnum)]
 pub enum Lang {
     Rust,
     Cpp,

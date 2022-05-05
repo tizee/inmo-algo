@@ -3,20 +3,24 @@ use std::fmt::Display;
 use anyhow::Result;
 use clap::{ArgEnum, Args, Subcommand};
 
-use crate::common::Lang;
+use crate::common;
 use crate::config::Config;
 use crate::leetcode::{LeetCode, SearchConditionBuilder};
+use common::Lang;
 
 #[derive(Debug, Args)]
 pub struct LeetCodeArgs {
     /// problem id
     #[clap(short, long, requires = "lang")]
     pub id: Option<u32>,
-    /// solve problem
+    /// open with $EDITOR
     #[clap(long, requires = "id", requires = "lang")]
+    pub open: bool,
+    /// solve problem
+    #[clap(long, requires = "id", requires = "lang", conflicts_with = "open")]
     pub solve: bool,
     /// show tags of one problem, do not generate template
-    #[clap(long, requires = "id")]
+    #[clap(long, requires = "id", conflicts_with = "open")]
     pub tags: bool,
     #[clap(subcommand)]
     pub command: Option<LeetCodeCmds>,
@@ -80,10 +84,10 @@ impl Display for LevelEnum {
 pub struct ListArgs {
     /// list local todos
     #[clap(long)]
-    pub todo: Option<bool>,
+    pub todo: bool,
     /// list local solved
     #[clap(long)]
-    pub solved: Option<bool>,
+    pub solved: bool,
 }
 
 impl LeetCodeArgs {
@@ -111,8 +115,15 @@ impl LeetCodeArgs {
                     eprintln!("There is no tag for {}", id);
                 }
             } else {
+                let mut files = vec![];
                 for lang in args.lang.iter() {
-                    lc.add_todo(id, lang).await?;
+                    let res = lc.add_todo(id, lang).await?;
+                    if let Some(p) = res {
+                        files.push(p);
+                    }
+                }
+                if args.open {
+                    common::open_with_editor(&files);
                 }
             }
         } else if let Some(ref command) = args.command {
@@ -142,7 +153,7 @@ impl LeetCodeArgs {
                     lc.pick_one(query).await?;
                 }
                 LeetCodeCmds::List(args) => {
-                    if args.todo.is_some() {
+                    if args.todo {
                         // list todo
                         let todos = lc.todos()?;
                         println!("Todos:");
@@ -150,7 +161,7 @@ impl LeetCodeArgs {
                             println!("\t {}", todo);
                         }
                     }
-                    if args.solved.is_some() {
+                    if args.solved {
                         // list solved
                         let solved = lc.solutions()?;
                         println!("Solved:");
@@ -158,7 +169,7 @@ impl LeetCodeArgs {
                             println!("\t {}", solve);
                         }
                     }
-                    if args.todo.is_none() && args.solved.is_none() {
+                    if !args.todo && !args.solved {
                         // list todos and solutions
                         let todos = lc.todos()?;
                         let solved = lc.solutions()?;
