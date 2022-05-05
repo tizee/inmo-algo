@@ -91,58 +91,21 @@ impl LeetCode {
 
     /// add problem to todo directory
     /// if the problem has been already added, then it's a no-op
-    pub async fn add_todo(&self, front_problem_id: u32, lang: &Lang) -> Result<()> {
+    pub async fn add_todo(&self, front_problem_id: u32, lang: &Lang) -> Result<Option<PathBuf>> {
         let detail = self.get_question_detail(front_problem_id).await?;
         if let Some(question_detail) = detail {
             let problem = question_detail.to_problem();
-            return self.add_todo_problem(lang, &problem);
+            return Ok(Some(self.add_todo_problem(lang, &problem).unwrap()));
         }
-        Ok(())
+        Ok(None)
     }
     /// get list of todos from todos directory
     pub fn todos(&self) -> Result<Vec<ProblemEntry>> {
-        self.get_problem_entries(self.todo_dir())
+        get_problem_entries(self.todo_dir())
     }
 
     pub fn solutions(&self) -> Result<Vec<ProblemEntry>> {
-        self.get_problem_entries(self.solved_dir())
-    }
-
-    fn get_problem_entries<P: AsRef<Path>>(&self, p: P) -> Result<Vec<ProblemEntry>> {
-        let path = p.as_ref();
-        // get all todos
-        if path.is_dir() {
-            // get list of problem_id
-            let list: Vec<ProblemEntry> = fs::read_dir(path)
-                .unwrap()
-                .map(|entry| entry.unwrap().path())
-                .filter(|path| path.is_file())
-                .map_while(|path: PathBuf| -> Option<ProblemEntry> {
-                    let fname = path.file_name().unwrap().to_str().unwrap();
-                    let pair = fname.split_once('.');
-                    if let Some(pair) = pair {
-                        let file_name = pair.0;
-                        let file_extension = pair.1;
-                        let id = &pair.0[1..];
-                        return match id.parse::<u32>() {
-                            Ok(id) => {
-                                if file_name != file_extension {
-                                    return Some(ProblemEntry {
-                                        id,
-                                        lang: Lang::from_extension(file_extension),
-                                    });
-                                }
-                                None
-                            }
-                            Err(_) => None,
-                        };
-                    }
-                    None
-                })
-                .collect();
-            return Ok(list);
-        }
-        Err(anyhow!(format!("{} is not a directory", path.display())))
+        get_problem_entries(self.solved_dir())
     }
 
     /// complete todo solution by moving it to solutions directory
@@ -297,7 +260,7 @@ impl LeetCode {
         Ok(())
     }
 
-    fn add_todo_problem(&self, lang: &Lang, problem: &Problem) -> Result<()> {
+    fn add_todo_problem(&self, lang: &Lang, problem: &Problem) -> Result<PathBuf> {
         let todo_dir = self.todo_dir();
         if !todo_dir.exists() {
             fs::create_dir_all(&todo_dir)?;
@@ -339,18 +302,12 @@ impl LeetCode {
                 ))?;
             }
         }
-        // open in $EDITOR
-        // let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-        // Command::new(editor)
-        //     .arg(file_path)
-        //     .spawn()
-        //     .context("failed to open in $EDITOR")?;
-        Ok(())
+        Ok(file_path)
     }
 
     /// pick one question based on conditions
     /// for the sake of simplicity, please use web UI instead for compliciated conditions
-    pub async fn pick_one(&self, query: SearchCondition) -> Result<()> {
+    pub async fn pick_one(&self, query: SearchCondition) -> Result<Option<PathBuf>> {
         // get all matches according to conditions
         // we could reuse leetcode's query for avoiding searching locally
         // but I want to do things the hard way
@@ -372,12 +329,12 @@ impl LeetCode {
             if let Some(detail) = question_detail {
                 println!("pick {} {}", detail.question_frontend_id, detail.title_slug);
                 let problem = detail.to_problem();
-                return self.add_todo_problem(&query.lang, &problem);
+                return Ok(Some(self.add_todo_problem(&query.lang, &problem).unwrap()));
             }
         } else {
             eprintln!("There is no matched problem!");
         }
-        Ok(())
+        Ok(None)
     }
 
     /// get tags of a question
@@ -475,4 +432,64 @@ impl SearchConditionBuilder {
 #[inline(always)]
 fn padding_id(question_id: u32) -> String {
     format!("p{:04}", question_id)
+}
+
+#[inline]
+fn get_problem_entries<P: AsRef<Path>>(p: P) -> Result<Vec<ProblemEntry>> {
+    let path = p.as_ref();
+    if path.is_dir() {
+        // get list of problem_id
+        let paths = fs::read_dir(path).unwrap();
+        let list = paths
+            .map(|entry| entry.unwrap().path())
+            .filter_map(path_to_entry)
+            .collect();
+        return Ok(list);
+    }
+    Err(anyhow!(format!("{} is not a directory", path.display())))
+}
+
+#[inline]
+fn path_to_entry(path: PathBuf) -> Option<ProblemEntry> {
+    let fname = path.file_name().unwrap().to_str().unwrap();
+    let pair = fname.split_once('.');
+    if let Some(pair) = pair {
+        let file_extension = pair.1;
+        let id = &pair.0[1..];
+        return match id.parse::<u32>() {
+            Ok(id) => {
+                return Some(ProblemEntry {
+                    id,
+                    lang: Lang::from_extension(file_extension),
+                });
+            }
+            Err(_) => None,
+        };
+    }
+    None
+}
+
+#[cfg(test)]
+mod test_leetcode {
+    use super::path_to_entry;
+    use super::Lang;
+    use std::path::PathBuf;
+    #[test]
+    fn test_path_to_entry() {
+        let p = PathBuf::from("p0001.rs");
+        let entry = path_to_entry(p);
+        assert!(entry.is_some());
+        let entry = entry.unwrap();
+        assert_eq!(entry.id, 1);
+        assert_eq!(entry.lang, Lang::Rust);
+        let p = PathBuf::from("p0936.py");
+        let entry = path_to_entry(p);
+        assert!(entry.is_some());
+        let entry = entry.unwrap();
+        assert_eq!(entry.id, 936);
+        assert_eq!(entry.lang, Lang::Python3);
+        let p = PathBuf::from("mod.rs");
+        let entry = path_to_entry(p);
+        assert!(entry.is_none());
+    }
 }
