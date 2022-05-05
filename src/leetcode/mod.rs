@@ -37,7 +37,10 @@ pub struct ProblemEntry {
 
 impl Display for ProblemEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("problem-id: {:04}\tlang: {}", self.id, self.lang))
+        f.write_fmt(format_args!(
+            "problem-id: {:04}\tlang: {}",
+            self.id, self.lang
+        ))
     }
 }
 
@@ -97,6 +100,7 @@ impl LeetCode {
             let problem = question_detail.to_problem();
             return Ok(Some(self.add_todo_problem(lang, &problem).unwrap()));
         }
+        eprintln!("{} doesn't exist!!", front_problem_id);
         Ok(None)
     }
     /// get list of todos from todos directory
@@ -301,33 +305,85 @@ impl LeetCode {
                     file_path.display()
                 ))?;
             }
+        } else {
+            println!("{} already added!!!", file_path.display());
         }
         Ok(file_path)
     }
 
-    /// pick one question based on conditions
-    /// for the sake of simplicity, please use web UI instead for compliciated conditions
-    pub async fn pick_one(&self, query: SearchCondition) -> Result<Option<PathBuf>> {
-        // get all matches according to conditions
-        // we could reuse leetcode's query for avoiding searching locally
-        // but I want to do things the hard way
-        let problems = self.get_questions().await?;
-        let matches = if let Some(level) = query.level {
-            problems
-                .into_iter()
-                .filter(|p| p.difficulty.to_string().eq_ignore_ascii_case(&level))
-                .collect()
+    pub async fn filter_problems(&self, query: &SearchCondition) -> Result<Vec<LCQuestionDetail>> {
+        if let Some(ref topics) = query.topics {
+            let mut problems: Vec<LCQuestionDetail> = Vec::new();
+            // get problems for each topics
+            for topic in topics.iter() {
+                if let Ok(p_list) = self.get_problems_of_tag(topic).await {
+                    problems = p_list
+                        .questions
+                        .into_iter()
+                        .chain(problems.into_iter())
+                        .collect();
+                }
+            }
+            if let Some(ref level) = query.level {
+                return Ok(problems
+                    .into_iter()
+                    .filter_map(|p| {
+                        if p.difficulty
+                            .as_ref()
+                            .unwrap()
+                            .to_string()
+                            .eq_ignore_ascii_case(&level)
+                        {
+                            return Some(p);
+                        }
+                        None
+                    })
+                    .collect());
+            } else {
+                return Ok(problems);
+            }
         } else {
-            problems
-        };
+            // problems list
+            let problems = self.get_questions().await?;
+            if let Some(ref level) = query.level {
+                Ok(problems
+                    .into_iter()
+                    .filter_map(|p| {
+                        if p.difficulty.to_string().eq_ignore_ascii_case(&level) {
+                            return Some(p.to_detail());
+                        }
+                        None
+                    })
+                    .collect())
+            } else {
+                Ok(problems.into_iter().map(|p| p.to_detail()).collect())
+            }
+        }
+    }
+
+    /// pick one question based on conditions
+    /// for the sake of simplicity, please use web UI to query with compliciated conditions
+    pub async fn pick_one(&self, query: SearchCondition) -> Result<Option<PathBuf>> {
+        let matches = self.filter_problems(&query).await?;
         if !matches.is_empty() {
             let random_index: usize = rand::thread_rng().gen_range(0..=matches.len());
             let question = &matches[random_index];
             let question_detail = self
-                .get_question_detail(question.stat.frontend_question_id)
+                .get_question_detail(
+                    question
+                        .question_frontend_id
+                        .as_ref()
+                        .unwrap()
+                        .parse()
+                        .unwrap(),
+                )
                 .await?;
             if let Some(detail) = question_detail {
-                println!("pick {} {}", detail.question_frontend_id, detail.title_slug);
+                println!(
+                    "pick {} {}",
+                    detail.question_frontend_id.as_ref().unwrap(),
+                    detail.title_slug.as_ref().unwrap()
+                );
                 let problem = detail.to_problem();
                 return Ok(Some(self.add_todo_problem(&query.lang, &problem).unwrap()));
             }
@@ -342,7 +398,12 @@ impl LeetCode {
         let question = self.get_question_detail(question_id).await?;
         if let Some(detail) = question {
             return Ok(Some(
-                detail.topic_tags.iter().map(|t| t.to_string()).collect(),
+                detail
+                    .topic_tags
+                    .unwrap()
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect(),
             ));
         }
         Ok(None)
@@ -397,11 +458,13 @@ pub struct SearchCondition {
     /// langugage is required
     pub lang: Lang,
     pub level: Option<String>,
+    pub topics: Option<Vec<String>>,
 }
 
 pub struct SearchConditionBuilder {
     pub lang: Lang,
     pub level: Option<String>,
+    pub topics: Option<Vec<String>>,
 }
 
 impl SearchConditionBuilder {
@@ -409,6 +472,7 @@ impl SearchConditionBuilder {
         SearchConditionBuilder {
             lang: Lang::Rust,
             level: None,
+            topics: None,
         }
     }
     pub fn lang(&mut self, name: String) -> &mut Self {
@@ -421,10 +485,16 @@ impl SearchConditionBuilder {
         self
     }
 
-    pub fn build(&self) -> SearchCondition {
+    pub fn topics(&mut self, topics: Vec<String>) -> &mut Self {
+        self.topics = Some(topics);
+        self
+    }
+
+    pub fn build(self) -> SearchCondition {
         SearchCondition {
-            lang: self.lang.clone(),
-            level: self.level.clone(),
+            lang: self.lang,
+            level: self.level,
+            topics: self.topics,
         }
     }
 }

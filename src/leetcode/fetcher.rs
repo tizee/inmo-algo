@@ -42,7 +42,7 @@ impl LCFetcher {
         }
         pb.finish_with_message(format!(
             "{} {} downloaded",
-            question_detail.question_frontend_id, title_slug
+            question_detail.question_frontend_id.as_ref().unwrap(), title_slug
         ));
         Ok(question_detail)
     }

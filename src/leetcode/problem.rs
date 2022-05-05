@@ -85,6 +85,26 @@ pub struct LCProblemStat {
     pub is_new_question: bool,
 }
 
+impl LCProblem {
+    pub fn to_detail(self) -> LCQuestionDetail {
+        LCQuestionDetail {
+            question_id: Some(self.stat.question_id.to_string()),
+            question_frontend_id: Some(self.stat.frontend_question_id.to_string()),
+            code_snippets: None,
+            content: None,
+            difficulty: Some(self.difficulty.to_string()),
+            title: self.stat.question_title,
+            title_slug: self.stat.question_title_slug,
+            is_paid_only: Some(self.paid_only),
+            meta_data: None,
+            sample_test_case: None,
+            similar_questions: None,
+            stats: None,
+            topic_tags: None,
+        }
+    }
+}
+
 /// generic response structure
 #[derive(Debug, Deserialize)]
 pub struct LCResp<T> {
@@ -107,16 +127,16 @@ pub struct LCQuestionDetail {
     #[serde(rename = "questionId")]
     pub question_id: Option<String>,
     #[serde(rename = "questionFrontendId")]
-    pub question_frontend_id: String,
-    pub title: String,
+    pub question_frontend_id: Option<String>,
+    pub title: Option<String>,
     #[serde(rename = "titleSlug")]
-    pub title_slug: String,
+    pub title_slug: Option<String>,
     /// may omit in other structure
     pub content: Option<String>,
     #[serde(rename = "isPaidOnly")]
-    pub is_paid_only: bool,
+    pub is_paid_only: Option<bool>,
     pub difficulty: Option<String>,
-    pub stats: String,
+    pub stats: Option<String>,
     #[serde(rename = "codeSnippets")]
     pub code_snippets: Option<Vec<LCCodeSnippet>>,
     #[serde(rename = "sampleTestCase")]
@@ -124,7 +144,7 @@ pub struct LCQuestionDetail {
     #[serde(rename = "metaData")]
     pub meta_data: Option<String>,
     #[serde(rename = "topicTags")]
-    pub topic_tags: Vec<LCQuestionTopicTag>,
+    pub topic_tags: Option<Vec<LCQuestionTopicTag>>,
     /// string of json list, need deserialize one more time
     #[serde(rename = "similarQuestions")]
     pub similar_questions: Option<String>,
@@ -191,8 +211,8 @@ impl Display for LCQuestionDetail {
         f.write_fmt(format_args!(
             "Level: {}\t{}\t{}",
             self.difficulty.as_ref().unwrap(),
-            self.question_frontend_id,
-            self.title_slug,
+            self.question_frontend_id.as_ref().unwrap(),
+            self.title_slug.as_ref().unwrap(),
         ))
     }
 }
@@ -201,10 +221,10 @@ impl LCQuestionDetail {
     /// convert to Problem and move ownership
     pub fn to_problem(self) -> Problem {
         Problem {
-            title: self.title_slug,
+            title: self.title_slug.unwrap(),
             content: self.content.unwrap(),
             difficulty: self.difficulty,
-            question_id: self.question_frontend_id.parse().unwrap(),
+            question_id: self.question_frontend_id.unwrap().parse().unwrap(),
             code_snippets: self.code_snippets.unwrap(),
             sample_test_case: self.sample_test_case.unwrap(),
         }

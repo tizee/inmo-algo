@@ -52,11 +52,10 @@ pub enum LeetCodeCmds {
 
 #[derive(Debug, Args)]
 pub struct PickOneArgs {
-    // TODO: topic
-    // #[clap(multiple_occurrences(true), long)]
-    // tag: Option<String>,
+    #[clap(multiple_occurrences(true), long)]
+    topic: Option<Vec<String>>,
     /// difficulty level
-    #[clap(arg_enum)]
+    #[clap(long,arg_enum)]
     pub level: Option<LevelEnum>,
     /// generate template of given language
     #[clap(long, arg_enum)]
@@ -148,6 +147,9 @@ impl LeetCodeArgs {
                     query.lang(args.lang.to_string());
                     if let Some(ref level) = args.level {
                         query.level(level.to_string());
+                    }
+                    if let Some(ref topics) = args.topic {
+                        query.topics(topics.to_vec());
                     }
                     let query = query.build();
                     lc.pick_one(query).await?;
