@@ -37,7 +37,7 @@ pub struct ProblemEntry {
 
 impl Display for ProblemEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("problem-id: {}\tlang: {}", self.id, self.lang))
+        f.write_fmt(format_args!("problem-id: {:04}\tlang: {}", self.id, self.lang))
     }
 }
 
