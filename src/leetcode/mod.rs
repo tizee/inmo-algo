@@ -449,13 +449,16 @@ impl LeetCode {
         }
     }
 
-    pub async fn get_related_problems(
+    pub async fn get_similar_questions(
         &self,
         front_problem_id: u32,
     ) -> Result<Option<Vec<LCSimilarQuestion>>> {
         let q = self.get_question_detail(front_problem_id).await?;
         if let Some(detail) = q {
-            return Ok(detail.similar_questions);
+            if let Some(s_str) = detail.similar_questions {
+                let q_list = serde_json::from_str::<Vec<LCSimilarQuestion>>(&s_str)?;
+                return Ok(Some(q_list));
+            }
         }
         Ok(None)
     }

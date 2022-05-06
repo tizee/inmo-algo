@@ -11,7 +11,7 @@ use common::Lang;
 #[derive(Debug, Args)]
 pub struct LeetCodeArgs {
     /// problem id
-    #[clap(short, long, requires = "lang")]
+    #[clap(short, long)]
     pub id: Option<u32>,
     /// open with $EDITOR
     #[clap(long, requires = "id", requires = "lang")]
@@ -30,6 +30,7 @@ pub struct LeetCodeArgs {
     /// generate template of given language
     #[clap(
         long,
+        default_value = "cpp",
         multiple_occurrences(true),
         requires = "id",
         conflicts_with = "tags",
@@ -119,7 +120,7 @@ impl LeetCodeArgs {
                     }
                 }
                 if args.related {
-                    let list = lc.get_related_problems(id).await?;
+                    let list = lc.get_similar_questions(id).await?;
                     if let Some(q_list) = list {
                         for q in q_list.iter() {
                             println!("Level: {}\t{}", q.difficulty, q.title_slug);

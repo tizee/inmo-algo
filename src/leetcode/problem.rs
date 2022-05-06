@@ -147,7 +147,7 @@ pub struct LCQuestionDetail {
     pub topic_tags: Option<Vec<LCQuestionTopicTag>>,
     /// string of json list, need deserialize one more time
     #[serde(rename = "similarQuestions")]
-    pub similar_questions: Option<Vec<LCSimilarQuestion>>,
+    pub similar_questions: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
