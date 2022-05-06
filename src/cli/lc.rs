@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{ArgEnum, Args, Subcommand};
 
 use crate::common;
+use crate::common::{TreeView, TreeViewNode};
 use crate::config::Config;
 use crate::leetcode::{LeetCode, SearchConditionBuilder};
 use common::Lang;
@@ -174,9 +175,12 @@ impl LeetCodeArgs {
                     if args.todo {
                         // list todo
                         let todos = lc.todos()?;
-                        println!("Todos:");
-                        for todo in todos.iter() {
-                            println!("\t {}", todo);
+                        if !todos.is_empty() {
+                            for todo in todos.iter() {
+                                println!("\t {}", todo);
+                            }
+                        } else {
+                            println!("empty:");
                         }
                     }
                     if args.solved {

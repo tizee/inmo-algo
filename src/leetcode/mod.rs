@@ -2,6 +2,7 @@ mod fetcher;
 mod problem;
 mod query;
 mod storage;
+mod table;
 mod template;
 
 use anyhow::anyhow;
@@ -273,6 +274,12 @@ impl LeetCode {
         let file_path = self
             .todo_dir()
             .join(format!("{}.{}", file_name, lang.to_extension()));
+        let solved_file_path =
+            self.solved_dir()
+                .join(format!("{}.{}", file_name, lang.to_extension()));
+        if solved_file_path.exists() {
+            return Err(anyhow!(format!("{} is solved", problem.title)));
+        }
         if !file_path.exists() {
             // template
             let template_file = TemplateBuilder::get_template_str(lang);

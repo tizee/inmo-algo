@@ -2,10 +2,13 @@ use clap::ArgEnum;
 use std::{fmt::Display, str::FromStr, string::ParseError};
 
 #[derive(Debug, Clone, PartialEq, ArgEnum)]
+// I do not recommend use languages without useful data structures to solve algorithm problems
 pub enum Lang {
     Rust,
     Cpp,
     Python3,
+    Typescript,
+    Javascript,
     Unknown,
 }
 
@@ -15,6 +18,8 @@ impl Lang {
             Lang::Cpp => "cpp".to_string(),
             Lang::Rust => "rs".to_string(),
             Lang::Python3 => "py".to_string(),
+            Lang::Typescript => "ts".to_string(),
+            Lang::Javascript => "js".to_string(),
             Lang::Unknown => "unknown".to_string(),
         }
     }
@@ -24,6 +29,8 @@ impl Lang {
             "cpp" => Lang::Cpp,
             "rs" => Lang::Rust,
             "py" => Lang::Python3,
+            "js" => Lang::Javascript,
+            "ts" => Lang::Typescript,
             _ => Lang::Unknown,
         }
     }
@@ -41,8 +48,10 @@ impl From<&str> for Lang {
         let language = &l.to_ascii_lowercase();
         match language.as_str() {
             "rust" => Lang::Rust,
-            "c++" => Lang::Cpp,
+            "cpp" => Lang::Cpp,
             "python3" => Lang::Python3,
+            "javascript" => Lang::Javascript,
+            "typescript" => Lang::Typescript,
             _ => Lang::Unknown,
         }
     }
@@ -51,9 +60,11 @@ impl From<&str> for Lang {
 impl Display for Lang {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Lang::Rust => f.write_str("rust"),
-            Lang::Cpp => f.write_str("c++"),
-            Lang::Python3 => f.write_str("python3"),
+            Lang::Rust => f.write_str("Rust"),
+            Lang::Cpp => f.write_str("C++"),
+            Lang::Python3 => f.write_str("Python3"),
+            Lang::Javascript => f.write_str("Javascript"),
+            Lang::Typescript => f.write_str("Typescript"),
             Lang::Unknown => f.write_str("unknown"),
         }
     }

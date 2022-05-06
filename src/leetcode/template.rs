@@ -23,7 +23,8 @@ pub fn build_template(problem: &Problem, lang: &Lang, template_file: &str) -> St
         .replace("CONTENT", &problem.content)
         .replace("DISCUSSION_LINK", &discussion_link)
         .replace("PROBLEM_LINK", &problem_link)
-        .replace("ID", &problem.question_id.to_owned().to_string())
+        .replace("LEVEL", problem.difficulty.as_ref().unwrap())
+        .replace("ID", &problem.question_id.to_string())
         .replace(
             "DEFAULT_CODE",
             &problem
@@ -42,33 +43,44 @@ impl TemplateBuilder {
     pub(crate) fn get_template_comments(lang: &Lang) -> String {
         lazy_static! {
             static ref C_LIKE_FRONT_MATTER: &'static str = r"/*
- * TITLE
+ * @frontendId ID
+ * @title TITLE
+ * @level LEVEL
+ *
  * CONTENT
  *
- * problem link: PROBLEM_LINK
- * discussion link: DISCUSSION_LINK
+ * @link PROBLEM_LINK
+ * @discussion DISCUSSION_LINK
  *
  * */
 ";
             static ref UNKNOWN_FRONT_MATTER: &'static str = r"
-TITLE
+@frontendId ID
+@title TITLE
+@level LEVEL
+
 CONTENT
 
-problem link: PROBLEM_LINK
-discussion link: DISCUSSION_LINK
-                ";
+@link PROBLEM_LINK
+@discussion DISCUSSION_LINK
+";
             static ref PYTHON_FRONT_MATTER: &'static str = r#""""
-    TITLE
-    CONTENT
+@frontendId ID
+@title TITLE
+@level LEVEL
 
-    problem link: PROBLEM_LINK
-    discussion link: DISCUSSION_LINK
-                """"#;
+CONTENT
+
+@link PROBLEM_LINK
+@discussion DISCUSSION_LINK
+""""#;
         }
         match lang {
             Lang::Rust => C_LIKE_FRONT_MATTER.to_string(),
             Lang::Cpp => C_LIKE_FRONT_MATTER.to_string(),
             Lang::Python3 => PYTHON_FRONT_MATTER.to_string(),
+            Lang::Javascript => C_LIKE_FRONT_MATTER.to_string(),
+            Lang::Typescript => C_LIKE_FRONT_MATTER.to_string(),
             Lang::Unknown => UNKNOWN_FRONT_MATTER.to_string(),
         }
     }
@@ -78,6 +90,31 @@ discussion link: DISCUSSION_LINK
         TemplateBuilder::get_template_comments(lang)
             + "\n"
             + &TemplateBuilder::get_snippet_block(lang)
+            + "\n"
+            + &TemplateBuilder::get_test_block(lang)
+    }
+
+    pub(crate) fn get_test_block(lang: &Lang) -> String {
+        match lang {
+            Lang::Rust => r"
+#[cfg(test)]
+mod test_pID {
+    use super::*;
+    #[test]
+    fn test_ID() {}
+}
+"
+            .to_string(),
+            Lang::Python3 => r"
+def test_solve():
+    pass
+
+if __name__== '__main__':
+    test_solve()
+"
+            .to_string(),
+            _ => "".to_string(),
+        }
     }
 
     #[inline]
@@ -87,14 +124,7 @@ discussion link: DISCUSSION_LINK
 struct Solution;
 
 DEFAULT_CODE
-
-#[cfg(test)]
-mod test_pID {
-    use super::*;
-    #[test]
-    fn test_ID() {}
-}
-                    "
+"
             .to_string(),
 
             _ => r"
