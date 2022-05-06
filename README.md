@@ -26,13 +26,13 @@ Have fun coding ;)
 
 - [x] Download spinner
 
-## TODOs
-
-### Codeforces
+### TUI
 
 WIP
 
-### TUI
+## TODOs
+
+### Codeforces
 
 WIP
 

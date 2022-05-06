@@ -22,6 +22,9 @@ pub struct LeetCodeArgs {
     /// show tags of one problem, do not generate template
     #[clap(long, requires = "id", conflicts_with = "open")]
     pub tags: bool,
+    /// show related problems
+    #[clap(long, requires = "id", conflicts_with = "open")]
+    pub related: bool,
     #[clap(subcommand)]
     pub command: Option<LeetCodeCmds>,
     /// generate template of given language
@@ -55,7 +58,7 @@ pub struct PickOneArgs {
     #[clap(multiple_occurrences(true), long)]
     topic: Option<Vec<String>>,
     /// difficulty level
-    #[clap(long,arg_enum)]
+    #[clap(long, arg_enum)]
     pub level: Option<LevelEnum>,
     /// generate template of given language
     #[clap(long, arg_enum)]
@@ -98,20 +101,32 @@ impl LeetCodeArgs {
                 for lang in args.lang.iter() {
                     lc.solve_todo(id, lang)?;
                 }
-            } else if args.tags {
-                let tags = lc.get_question_tags(id).await?;
-                if let Some(tags) = tags {
-                    if !tags.is_empty() {
-                        println!("tags for {}:", id);
-                        for tag in tags.iter() {
-                            print!("\t{}", tag);
+            } else if args.tags || args.related {
+                if args.tags {
+                    let tags = lc.get_question_tags(id).await?;
+                    if let Some(tags) = tags {
+                        if !tags.is_empty() {
+                            println!("tags for {}:", id);
+                            for tag in tags.iter() {
+                                print!("\t{}", tag);
+                            }
+                            println!();
+                        } else {
+                            eprintln!("There is no tag for {}", id);
                         }
-                        println!();
                     } else {
                         eprintln!("There is no tag for {}", id);
                     }
-                } else {
-                    eprintln!("There is no tag for {}", id);
+                }
+                if args.related {
+                    let list = lc.get_related_problems(id).await?;
+                    if let Some(q_list) = list {
+                        for q in q_list.iter() {
+                            println!("Level: {}\t{}", q.difficulty, q.title_slug);
+                        }
+                    } else {
+                        eprintln!("There is no similar questions for {}", id);
+                    }
                 }
             } else {
                 let mut files = vec![];

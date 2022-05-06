@@ -28,7 +28,7 @@ use lazy_static::lazy_static;
 use problem::{LCProblem, Problem};
 use template::TemplateBuilder;
 
-use self::problem::{LCEdge, LCQuestionDetail, LCQuestionTopicTag, LCTopicTag};
+use self::problem::{LCEdge, LCQuestionDetail, LCQuestionTopicTag, LCSimilarQuestion, LCTopicTag};
 
 pub struct ProblemEntry {
     pub id: u32,
@@ -325,22 +325,18 @@ impl LeetCode {
                 }
             }
             if let Some(ref level) = query.level {
-                return Ok(problems
+                Ok(problems
                     .into_iter()
-                    .filter_map(|p| {
-                        if p.difficulty
+                    .filter(|p| {
+                        p.difficulty
                             .as_ref()
                             .unwrap()
                             .to_string()
-                            .eq_ignore_ascii_case(&level)
-                        {
-                            return Some(p);
-                        }
-                        None
+                            .eq_ignore_ascii_case(level)
                     })
-                    .collect());
+                    .collect())
             } else {
-                return Ok(problems);
+                Ok(problems)
             }
         } else {
             // problems list
@@ -349,7 +345,7 @@ impl LeetCode {
                 Ok(problems
                     .into_iter()
                     .filter_map(|p| {
-                        if p.difficulty.to_string().eq_ignore_ascii_case(&level) {
+                        if p.difficulty.to_string().eq_ignore_ascii_case(level) {
                             return Some(p.to_detail());
                         }
                         None
@@ -451,6 +447,17 @@ impl LeetCode {
             storage::Storage::persist(cache_file, &problems)?;
             Ok(problems)
         }
+    }
+
+    pub async fn get_related_problems(
+        &self,
+        front_problem_id: u32,
+    ) -> Result<Option<Vec<LCSimilarQuestion>>> {
+        let q = self.get_question_detail(front_problem_id).await?;
+        if let Some(detail) = q {
+            return Ok(detail.similar_questions);
+        }
+        Ok(None)
     }
 }
 
