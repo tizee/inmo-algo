@@ -4,9 +4,8 @@ use anyhow::Result;
 use clap::{ArgEnum, Args, Subcommand};
 
 use crate::common;
-use crate::common::{TreeView, TreeViewNode};
 use crate::config::Config;
-use crate::leetcode::{LeetCode, SearchConditionBuilder};
+use crate::leetcode::{LeetCode, ProblemEntry, SearchConditionBuilder};
 use common::Lang;
 
 #[derive(Debug, Args)]
@@ -31,13 +30,12 @@ pub struct LeetCodeArgs {
     /// generate template of given language
     #[clap(
         long,
-        default_value = "cpp",
         multiple_occurrences(true),
         requires = "id",
         conflicts_with = "tags",
         arg_enum
     )]
-    pub lang: Vec<Lang>,
+    pub lang: Option<Vec<Lang>>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -100,8 +98,12 @@ impl LeetCodeArgs {
         let args = self;
         if let Some(id) = args.id {
             if args.solve {
-                for lang in args.lang.iter() {
-                    lc.solve_todo(id, lang)?;
+                if let Some(ref langs) = args.lang {
+                    for lang in langs.iter() {
+                        lc.solve_todo(id, lang)?;
+                    }
+                } else {
+                    lc.solve_todo(id, &config.default_lang)?;
                 }
             } else if args.tags || args.related {
                 if args.tags {
@@ -132,8 +134,15 @@ impl LeetCodeArgs {
                 }
             } else {
                 let mut files = vec![];
-                for lang in args.lang.iter() {
-                    let res = lc.add_todo(id, lang).await?;
+                if let Some(ref langs) = args.lang {
+                    for lang in langs.iter() {
+                        let res = lc.add_todo(id, lang).await?;
+                        if let Some(p) = res {
+                            files.push(p);
+                        }
+                    }
+                } else {
+                    let res = lc.add_todo(id, &config.default_lang).await?;
                     if let Some(p) = res {
                         files.push(p);
                     }
@@ -174,39 +183,38 @@ impl LeetCodeArgs {
                 LeetCodeCmds::List(args) => {
                     if args.todo {
                         // list todo
-                        let todos = lc.todos()?;
-                        if !todos.is_empty() {
-                            for todo in todos.iter() {
-                                println!("\t {}", todo);
-                            }
-                        } else {
-                            println!("empty:");
-                        }
+                        let todos = lc.todos().await?;
+                        print_entries("Todos", todos);
                     }
                     if args.solved {
                         // list solved
-                        let solved = lc.solutions()?;
-                        println!("Solved:");
-                        for solve in solved.iter() {
-                            println!("\t {}", solve);
-                        }
+                        let solved = lc.solutions().await?;
+                        print_entries("Solved", solved);
                     }
                     if !args.todo && !args.solved {
                         // list todos and solutions
-                        let todos = lc.todos()?;
-                        let solved = lc.solutions()?;
-                        println!("Todos:");
-                        for todo in todos.iter() {
-                            println!("\t {}", todo);
-                        }
-                        println!("Solved:");
-                        for solve in solved.iter() {
-                            println!("\t {}", solve);
-                        }
+                        let todos = lc.todos().await?;
+                        print_entries("Todos", todos);
+                        let solved = lc.solutions().await?;
+                        print_entries("Solved", solved);
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+#[inline]
+fn print_entries(title: &str, list: Vec<ProblemEntry>) {
+    println!();
+    println!("==> {}", title);
+    println!();
+    if !list.is_empty() {
+        for p in list.iter() {
+            println!("{}", p);
+        }
+    } else {
+        println!("empty");
     }
 }

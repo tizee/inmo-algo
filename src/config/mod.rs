@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 
+use crate::common::Lang;
+
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -18,14 +20,14 @@ pub struct Config {
     /// cache root dir
     /// default to $HOME/.inmo
     pub cache: PathBuf,
+    #[serde(default)]
+    /// default to cpp
+    pub default_lang: Lang,
 }
 
 pub struct ConfigPaths;
 
 impl ConfigPaths {
-    pub fn home_dir() -> PathBuf {
-        dirs_next::home_dir().unwrap()
-    }
     pub fn config_dir() -> PathBuf {
         dirs_next::home_dir().unwrap().join(".config").join("inmo")
     }
@@ -119,6 +121,7 @@ impl Default for Config {
             leetcode: ConfigPaths::default_data_path().join("leetcode"),
             codeforces: ConfigPaths::default_data_path().join("codeforces"),
             cache: ConfigPaths::default_cache_dir(),
+            default_lang: Lang::Cpp,
         }
     }
 }
@@ -132,6 +135,7 @@ mod test_config {
         let cfg_str = toml::to_string(&default_cfg).unwrap();
         let cfg = read_config(cfg_str.as_bytes()).unwrap();
         let cfg_str2 = toml::to_string(&cfg).unwrap();
+        println!("{}", cfg_str2);
         assert_eq!(cfg_str, cfg_str2);
     }
 }

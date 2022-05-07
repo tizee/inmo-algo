@@ -1,5 +1,4 @@
 use lazy_static::lazy_static;
-use std::fmt::Display;
 
 pub struct Symbols {
     /// horizontal bar
@@ -42,13 +41,9 @@ impl Symbols {
 }
 
 // draw tree view
-pub struct TreeView<S: Display, T: Display> {
-    pub data: S,
-    pub children: Option<Vec<TreeView<T, S>>>,
-}
-
-pub trait TreeViewNode {
-    fn draw(&self, max_depth: usize) -> String;
+pub struct TreeView {
+    pub data: String,
+    pub children: Option<Vec<TreeView>>,
 }
 
 lazy_static! {
@@ -77,53 +72,79 @@ fn level_padding() -> String {
 fn empty_padding() -> String {
     " ".repeat(4)
 }
+// TODO: style
+pub struct TreeViewStyle {
+    branch_offset: TreeViewOffset,
+    node_left_padding: usize,
+}
+pub enum TreeViewOffset {
+    Start,
+    End,
+}
 
-impl<S, T> TreeView<S, T>
-where
-    S: Display,
-    T: Display,
-{
-    fn new(data: S, children: Option<Vec<TreeView<T, S>>>) -> Self {
+impl Default for TreeViewStyle {
+    fn default() -> Self {
+        TreeViewStyle {
+            branch_offset: TreeViewOffset::Start,
+            node_left_padding: 2,
+        }
+    }
+}
+
+impl TreeView {
+    pub fn new(data: String, children: Option<Vec<TreeView>>) -> Self {
         TreeView { data, children }
     }
-    fn draw_node(&self, cur_depth: usize, max_depth: usize, is_last: bool) -> Option<Vec<String>> {
+    // render tree by lines
+    fn draw_node(
+        &self,
+        cur_depth: usize,
+        max_depth: usize,
+        is_last: bool,
+        style: &TreeViewStyle,
+    ) -> Option<Vec<String>> {
         if cur_depth >= max_depth {
             return None;
         }
         assert!(cur_depth < max_depth);
         let mut lines = Vec::new();
-        if is_last {
-            lines.push(draw_last_branch() + " " + &self.data.to_string());
+
+        let padding = " ".repeat(style.node_left_padding);
+        if cur_depth > 0 {
+            if is_last {
+                lines.push(draw_last_branch() + &padding + &self.data.to_string());
+            } else {
+                lines.push(draw_cross_branch() + &padding + &self.data.to_string());
+            }
         } else {
-            lines.push(draw_cross_branch() + " " + &self.data.to_string());
+            lines.push(self.data.to_string());
         }
+        let root_offset = match style.branch_offset {
+            TreeViewOffset::Start => "".to_string(),
+            TreeViewOffset::End => " ".repeat(self.data.len()),
+        };
+
         // children
         if let Some(ref nodes) = self.children {
             if !nodes.is_empty() {
                 // sub tree
                 for (i, node) in nodes.iter().enumerate() {
-                    let sub = node.draw_node(cur_depth + 1, max_depth, i == nodes.len() - 1);
-                    if let Some(mut sub_lines) = sub {
-                        if cur_depth > 0 {
-                            if !is_last {
-                                lines.push(
-                                    sub_lines
-                                        .iter_mut()
-                                        .map(|line| level_padding() + line)
-                                        .collect::<Vec<String>>()
-                                        .join("\n"),
-                                );
+                    let sub = node.draw_node(cur_depth + 1, max_depth, i == nodes.len() - 1, style);
+                    let node_offset = match style.branch_offset {
+                        TreeViewOffset::Start => "".to_string(),
+                        TreeViewOffset::End => " ".repeat(node.data.len()),
+                    };
+                    if let Some(sub_lines) = sub {
+                        for line in sub_lines.iter() {
+                            if cur_depth > 0 {
+                                if !is_last {
+                                    lines.push(level_padding() + &padding + &node_offset + line);
+                                } else {
+                                    lines.push(empty_padding() + &padding + &node_offset + line);
+                                }
                             } else {
-                                lines.push(
-                                    sub_lines
-                                        .iter_mut()
-                                        .map(|line| empty_padding() + line)
-                                        .collect::<Vec<String>>()
-                                        .join("\n"),
-                                );
+                                lines.push(root_offset.clone() + line);
                             }
-                        } else {
-                            lines.push(sub_lines.join("\n"));
                         }
                     }
                 }
@@ -131,50 +152,44 @@ where
         }
         Some(lines)
     }
-}
 
-impl<S, T> TreeViewNode for TreeView<S, T>
-where
-    S: Display,
-    T: Display,
-{
-    fn draw(&self, max_depth: usize) -> String {
-        self.draw_node(0, max_depth, false).unwrap().join("\n")
+    pub fn draw_default(&self, max_depth: usize) -> String {
+        self.draw_node(0, max_depth, false, &TreeViewStyle::default())
+            .unwrap()
+            .join("\n")
+    }
+    pub fn draw_with_style(&self, max_depth: usize, style: TreeViewStyle) -> String {
+        self.draw_node(0, max_depth, false, &style)
+            .unwrap()
+            .join("\n")
     }
 }
 
 #[cfg(test)]
 mod test_draw {
-    use super::*;
-    use super::{TreeView, TreeViewNode};
-    struct Foo;
-    impl Display for Foo {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str("foo")
-        }
-    }
+    use super::TreeView;
     #[test]
     fn test_foo() {
-        let mut root = TreeView::new(Foo {}, None);
+        let mut root = TreeView::new("foo".to_string(), None);
         let mut children = Vec::new();
         for _ in 0..6 {
-            children.push(TreeView::new(Foo {}, None));
+            children.push(TreeView::new("foo".to_string(), None));
         }
         let mut children2 = Vec::new();
         for _ in 0..3 {
-            children2.push(TreeView::new(Foo {}, None));
+            children2.push(TreeView::new("foo".to_string(), None));
         }
         let mut children3 = Vec::new();
         for _ in 0..4 {
-            children3.push(TreeView::new(Foo {}, None));
+            children3.push(TreeView::new("foo".to_string(), None));
         }
         let mut children4 = Vec::new();
         for _ in 0..4 {
-            children4.push(TreeView::new(Foo {}, None));
+            children4.push(TreeView::new("foo".to_string(), None));
         }
         let mut children5 = Vec::new();
         for _ in 0..4 {
-            children5.push(TreeView::new(Foo {}, None));
+            children5.push(TreeView::new("foo".to_string(), None));
         }
         children3[1].children = Some(children4);
         children[1].children = Some(children2);
@@ -182,6 +197,6 @@ mod test_draw {
         children[5].children = Some(children5);
         root.children = Some(children);
         println!();
-        println!("{}", root.draw(5));
+        println!("{}", root.draw_default(5));
     }
 }

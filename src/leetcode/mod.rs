@@ -23,25 +23,38 @@ use std::{fs::File, io};
 use std::env;
 use std::process::{Command, Stdio};
 
-use crate::common::Lang;
 use fetcher::LCFetcher;
 use lazy_static::lazy_static;
-use problem::{LCProblem, Problem};
+use problem::{
+    LCEdge, LCProblem, LCQuestionDetail, LCQuestionTopicTag, LCSimilarQuestion, LCTopicTag, Problem,
+};
 use template::TemplateBuilder;
 
-use self::problem::{LCEdge, LCQuestionDetail, LCQuestionTopicTag, LCSimilarQuestion, LCTopicTag};
+use crate::common::Lang;
+use crate::common::TreeView;
 
 pub struct ProblemEntry {
     pub id: u32,
-    pub lang: Lang,
+    pub title: String,
+    pub level: String,
+    pub langs: Vec<Lang>,
 }
 
+/// tilte - level - id
+///               lang1
+///               lang2
 impl Display for ProblemEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "problem-id: {:04}\tlang: {}",
-            self.id, self.lang
-        ))
+        let langs_node = self
+            .langs
+            .iter()
+            .map(|lang| TreeView::new(lang.to_string(), None))
+            .collect::<Vec<TreeView>>();
+        let root = TreeView::new(
+            format!("{:04}\t{}\t{}", self.id, self.title, self.level),
+            Some(langs_node),
+        );
+        f.write_fmt(format_args!("{}", root.draw_default(2)))
     }
 }
 
@@ -105,12 +118,40 @@ impl LeetCode {
         Ok(None)
     }
     /// get list of todos from todos directory
-    pub fn todos(&self) -> Result<Vec<ProblemEntry>> {
-        get_problem_entries(self.todo_dir())
+    pub async fn todos(&self) -> Result<Vec<ProblemEntry>> {
+        let files = get_problem_files(self.todo_dir())?;
+        let mut res = Vec::new();
+        // fetch cache
+        for file in files.iter() {
+            let q = self.get_question_detail(file.id).await?;
+            if let Some(detail) = q {
+                res.push(ProblemEntry {
+                    id: file.id,
+                    title: detail.title.unwrap(),
+                    level: detail.difficulty.unwrap(),
+                    langs: file.langs.to_owned(),
+                });
+            }
+        }
+        Ok(res)
     }
 
-    pub fn solutions(&self) -> Result<Vec<ProblemEntry>> {
-        get_problem_entries(self.solved_dir())
+    pub async fn solutions(&self) -> Result<Vec<ProblemEntry>> {
+        let files = get_problem_files(self.solved_dir())?;
+        let mut res = Vec::new();
+        // fetch cache
+        for file in files.iter() {
+            let q = self.get_question_detail(file.id).await?;
+            if let Some(detail) = q {
+                res.push(ProblemEntry {
+                    id: file.id,
+                    title: detail.title.unwrap(),
+                    level: detail.difficulty.unwrap(),
+                    langs: file.langs.to_owned(),
+                });
+            }
+        }
+        Ok(res)
     }
 
     /// complete todo solution by moving it to solutions directory
@@ -521,23 +562,41 @@ fn padding_id(question_id: u32) -> String {
     format!("p{:04}", question_id)
 }
 
+struct ProblemFileSet {
+    pub id: u32,
+    pub langs: Vec<Lang>,
+}
+
+use std::collections::HashSet;
 #[inline]
-fn get_problem_entries<P: AsRef<Path>>(p: P) -> Result<Vec<ProblemEntry>> {
+fn get_problem_files<P: AsRef<Path>>(p: P) -> Result<Vec<ProblemFileSet>> {
     let path = p.as_ref();
     if path.is_dir() {
         // get list of problem_id
         let paths = fs::read_dir(path).unwrap();
-        let list = paths
+        let mut problem_set = HashSet::new();
+        let list: Vec<(u32, Lang)> = paths
             .map(|entry| entry.unwrap().path())
-            .filter_map(path_to_entry)
+            .filter_map(path_to_id_lang)
             .collect();
-        return Ok(list);
+        for (id, _) in list.iter() {
+            problem_set.insert(*id);
+        }
+        let mut res = Vec::new();
+        for id in problem_set.iter() {
+            let langs: Vec<Lang> = list
+                .iter()
+                .filter_map(|(i, lang)| if i == id { Some(lang.clone()) } else { None })
+                .collect();
+            res.push(ProblemFileSet { id: *id, langs });
+        }
+        return Ok(res);
     }
     Err(anyhow!(format!("{} is not a directory", path.display())))
 }
 
 #[inline]
-fn path_to_entry(path: PathBuf) -> Option<ProblemEntry> {
+fn path_to_id_lang(path: PathBuf) -> Option<(u32, Lang)> {
     let fname = path.file_name().unwrap().to_str().unwrap();
     let pair = fname.split_once('.');
     if let Some(pair) = pair {
@@ -545,10 +604,7 @@ fn path_to_entry(path: PathBuf) -> Option<ProblemEntry> {
         let id = &pair.0[1..];
         return match id.parse::<u32>() {
             Ok(id) => {
-                return Some(ProblemEntry {
-                    id,
-                    lang: Lang::from_extension(file_extension),
-                });
+                return Some((id, Lang::from_extension(file_extension)));
             }
             Err(_) => None,
         };
@@ -558,25 +614,25 @@ fn path_to_entry(path: PathBuf) -> Option<ProblemEntry> {
 
 #[cfg(test)]
 mod test_leetcode {
-    use super::path_to_entry;
+    use super::path_to_id_lang;
     use super::Lang;
     use std::path::PathBuf;
     #[test]
     fn test_path_to_entry() {
         let p = PathBuf::from("p0001.rs");
-        let entry = path_to_entry(p);
-        assert!(entry.is_some());
-        let entry = entry.unwrap();
-        assert_eq!(entry.id, 1);
-        assert_eq!(entry.lang, Lang::Rust);
+        let id_lang = path_to_id_lang(p);
+        assert!(id_lang.is_some());
+        let id_lang = id_lang.unwrap();
+        assert_eq!(id_lang.0, 1);
+        assert_eq!(id_lang.1, Lang::Rust);
         let p = PathBuf::from("p0936.py");
-        let entry = path_to_entry(p);
-        assert!(entry.is_some());
-        let entry = entry.unwrap();
-        assert_eq!(entry.id, 936);
-        assert_eq!(entry.lang, Lang::Python3);
+        let id_lang = path_to_id_lang(p);
+        assert!(id_lang.is_some());
+        let id_lang = id_lang.unwrap();
+        assert_eq!(id_lang.0, 936);
+        assert_eq!(id_lang.1, Lang::Python3);
         let p = PathBuf::from("mod.rs");
-        let entry = path_to_entry(p);
-        assert!(entry.is_none());
+        let id_lang = path_to_id_lang(p);
+        assert!(id_lang.is_none());
     }
 }

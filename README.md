@@ -10,13 +10,16 @@ Have fun coding ;)
 
 - [x] generate solution template for given languages
 - [x] pick one problem within conditions
+- [x] list local solutions
+  - [x] tree view for langs
+  - [x] list format refactor
+- [x] list local todos
+  - [x] tree view for langs
+  - [x] list format refactor
 - [x] list problems by topic
-  - [ ] pretty table format: frontendId - level - title - state - lang
   - [ ] state of each problem (solved/unsolved/not downloaded) if founded in local
 - [x] list all topic tags
 - [x] solve to-do solution of given langauge
-- [x] list local solutions
-- [x] list local todos
 - [x] open with $EDITOR
 - [x] list similar questions
 
@@ -30,7 +33,7 @@ Have fun coding ;)
 - [x] support config for leetcode dir
 - [x] support config for codeforeces dir
 - [x] cache directory
-- [ ] default language
+- [x] default language
 
 ### Eye Candy
 

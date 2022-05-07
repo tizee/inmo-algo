@@ -1,7 +1,9 @@
 use clap::ArgEnum;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr, string::ParseError};
 
-#[derive(Debug, Clone, PartialEq, ArgEnum)]
+#[derive(Debug, Clone, PartialEq, ArgEnum, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 // I do not recommend use languages without useful data structures to solve algorithm problems
 pub enum Lang {
     Rust,
@@ -10,6 +12,13 @@ pub enum Lang {
     Typescript,
     Javascript,
     Unknown,
+}
+
+impl Default for Lang {
+    fn default() -> Self {
+        Lang::Cpp
+    }
+
 }
 
 impl Lang {
