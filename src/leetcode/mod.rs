@@ -38,11 +38,10 @@ pub struct ProblemEntry {
     pub title: String,
     pub level: String,
     pub langs: Vec<Lang>,
+    pub topics: Vec<String>,
 }
 
-/// tilte - level - id
-///               lang1
-///               lang2
+// display for tree view
 impl Display for ProblemEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let langs_node = self
@@ -51,7 +50,7 @@ impl Display for ProblemEntry {
             .map(|lang| TreeView::new(lang.to_string(), None))
             .collect::<Vec<TreeView>>();
         let root = TreeView::new(
-            format!("{:04}\t{}\t{}", self.id, self.title, self.level),
+            format!("{:04}\t{}\t{}", self.id, self.level, self.title),
             Some(langs_node),
         );
         f.write_fmt(format_args!("{}", root.draw_default(2)))
@@ -130,6 +129,12 @@ impl LeetCode {
                     title: detail.title.unwrap(),
                     level: detail.difficulty.unwrap(),
                     langs: file.langs.to_owned(),
+                    topics: detail
+                        .topic_tags
+                        .unwrap()
+                        .iter()
+                        .map(|tag| tag.slug.to_owned())
+                        .collect(),
                 });
             }
         }
@@ -148,6 +153,12 @@ impl LeetCode {
                     title: detail.title.unwrap(),
                     level: detail.difficulty.unwrap(),
                     langs: file.langs.to_owned(),
+                    topics: detail
+                        .topic_tags
+                        .unwrap()
+                        .iter()
+                        .map(|tag| tag.slug.to_owned())
+                        .collect(),
                 });
             }
         }
@@ -274,9 +285,9 @@ impl LeetCode {
         if cache.exists() {
             // is older than one week?
             let metadata = fs::metadata(cache).unwrap();
-            if let Ok(create_time) = metadata.created() {
+            if let Ok(modified_time) = metadata.modified() {
                 let elapsed = SystemTime::now()
-                    .duration_since(create_time)
+                    .duration_since(modified_time)
                     .unwrap()
                     .as_secs();
                 return elapsed > limit;
@@ -533,8 +544,8 @@ impl SearchConditionBuilder {
             topics: None,
         }
     }
-    pub fn lang(&mut self, name: String) -> &mut Self {
-        self.lang = Lang::from_str(name.as_str()).unwrap();
+    pub fn lang(&mut self, name: Lang) -> &mut Self {
+        self.lang = name;
         self
     }
 

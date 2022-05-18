@@ -11,10 +11,9 @@ use common::Lang;
 #[derive(Debug, Args)]
 pub struct LeetCodeArgs {
     /// problem id
-    #[clap(short, long)]
     pub id: Option<u32>,
     /// open with $EDITOR
-    #[clap(long, requires = "id", requires = "lang")]
+    #[clap(long, requires = "id")]
     pub open: bool,
     /// solve problem
     #[clap(long, requires = "id", requires = "lang", conflicts_with = "open")]
@@ -47,7 +46,7 @@ pub enum LeetCodeCmds {
     Tags,
     /// list all problems of a given tag
     #[clap(arg_required_else_help = true)]
-    Tag { tag: String },
+    Tag { topic: String },
     /// pick one problem
     #[clap(arg_required_else_help = true)]
     Pick(PickOneArgs),
@@ -90,6 +89,9 @@ pub struct ListArgs {
     /// list local solved
     #[clap(long)]
     pub solved: bool,
+    /// list local
+    #[clap(long, multiple_occurrences = true)]
+    pub topic: Option<Vec<String>>,
 }
 
 impl LeetCodeArgs {
@@ -153,13 +155,16 @@ impl LeetCodeArgs {
             }
         } else if let Some(ref command) = args.command {
             match command {
-                LeetCodeCmds::Tag { tag } => {
-                    if !tag.is_empty() {
-                        let list = lc.get_problems_of_tag(tag).await?;
-                        println!("Topic: {}", list.slug);
-                        for p in list.questions.iter() {
-                            println!("{}", p);
-                        }
+                LeetCodeCmds::Tag { topic } => {
+                    let list = lc.get_problems_of_tag(topic).await?;
+                    println!("Topic: {}", list.slug);
+                    for p in list.questions.iter() {
+                        println!(
+                            "{} {} {}",
+                            p.difficulty.as_ref().unwrap(),
+                            p.question_frontend_id.as_ref().unwrap(),
+                            p.title_slug.as_ref().unwrap()
+                        );
                     }
                 }
                 LeetCodeCmds::Tags => {
@@ -170,7 +175,7 @@ impl LeetCodeArgs {
                 }
                 LeetCodeCmds::Pick(args) => {
                     let mut query = SearchConditionBuilder::new();
-                    query.lang(args.lang.to_string());
+                    query.lang(args.lang.clone());
                     if let Some(ref level) = args.level {
                         query.level(level.to_string());
                     }
@@ -181,22 +186,39 @@ impl LeetCodeArgs {
                     lc.pick_one(query).await?;
                 }
                 LeetCodeCmds::List(args) => {
+                    let mut todos = lc.todos().await?;
+                    let mut todo_title = "Todos".to_string();
+                    if let Some(ref topics) = args.topic {
+                        todos = todos
+                            .into_iter()
+                            .filter(|todo| todo.topics.iter().any(|topic| topics.contains(topic)))
+                            .collect();
+                        todo_title = todo_title.to_string() + " [ " + &topics.join(", ") + " ] ";
+                    }
+                    let mut solved = lc.solutions().await?;
+                    let mut solved_title = "Solved".to_string();
+                    if let Some(ref topics) = args.topic {
+                        solved = solved
+                            .into_iter()
+                            .filter(|todo| todo.topics.iter().any(|topic| topics.contains(topic)))
+                            .collect();
+                        solved_title =
+                            solved_title.to_string() + " [ " + &topics.join(", ") + " ] ";
+                    }
                     if args.todo {
                         // list todo
-                        let todos = lc.todos().await?;
                         print_entries("Todos", todos);
+                        return Ok(());
                     }
                     if args.solved {
                         // list solved
-                        let solved = lc.solutions().await?;
                         print_entries("Solved", solved);
+                        return Ok(());
                     }
                     if !args.todo && !args.solved {
                         // list todos and solutions
-                        let todos = lc.todos().await?;
-                        print_entries("Todos", todos);
-                        let solved = lc.solutions().await?;
-                        print_entries("Solved", solved);
+                        print_entries(&todo_title, todos);
+                        print_entries(&solved_title, solved);
                     }
                 }
             }

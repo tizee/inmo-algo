@@ -31,7 +31,7 @@ pub fn build_template(problem: &Problem, lang: &Lang, template_file: &str) -> St
                 .code_snippets
                 .iter()
                 .find(|&code| code.lang.eq_ignore_ascii_case(&lang.to_string()))
-                .unwrap_or_else(|| panic!("Failed to find default code for Rust"))
+                .unwrap_or_else(|| panic!("Failed to find default code for {}", &lang.to_string()))
                 .code,
         );
     problem_boilerplate.to_string()
