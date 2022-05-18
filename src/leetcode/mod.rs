@@ -257,7 +257,7 @@ impl LeetCode {
 
     /// get list of all problems
     /// update every week since LeetCode add new problems every week.
-    async fn get_questions(&self) -> Result<Vec<LCProblem>> {
+    pub async fn get_questions(&self) -> Result<Vec<LCProblem>> {
         let cache_file = self.cache_problem_list();
         if cache_file.exists() {
             lazy_static! {

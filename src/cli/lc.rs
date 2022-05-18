@@ -126,9 +126,19 @@ impl LeetCodeArgs {
                 }
                 if args.related {
                     let list = lc.get_similar_questions(id).await?;
+                    let questions = lc.get_questions().await?;
                     if let Some(q_list) = list {
                         for q in q_list.iter() {
-                            println!("Level: {}\t{}", q.difficulty, q.title_slug);
+                            let res = questions.iter().find(|p| {
+                                p.stat.question_title_slug.as_ref().unwrap().as_str()
+                                    == q.title_slug.as_str()
+                            });
+                            if let Some(problem) = res {
+                                println!(
+                                    "Level: {}\t {:04}.{}",
+                                    q.difficulty, problem.stat.frontend_question_id, q.title_slug
+                                );
+                            }
                         }
                     } else {
                         eprintln!("There is no similar questions for {}", id);
