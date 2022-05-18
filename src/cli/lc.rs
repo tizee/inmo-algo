@@ -238,10 +238,11 @@ impl LeetCodeArgs {
 }
 
 #[inline]
-fn print_entries(title: &str, list: Vec<ProblemEntry>) {
+fn print_entries(title: &str, mut list: Vec<ProblemEntry>) {
     println!();
     println!("==> {}", title);
     println!();
+    list.as_mut_slice().sort_by(|a, b| a.id.cmp(&b.id));
     if !list.is_empty() {
         for p in list.iter() {
             println!("{}", p);
