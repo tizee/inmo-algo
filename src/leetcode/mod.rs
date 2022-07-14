@@ -106,8 +106,17 @@ impl LeetCode {
     }
 
     /// add problem to todo directory
-    /// if the problem has been already added, then it's a no-op
+    /// if the problem has been already added or solved, then it's a no-op
     pub async fn add_todo(&self, front_problem_id: u32, lang: &Lang) -> Result<Option<PathBuf>> {
+        let mut solved_filename = self.solved_dir();
+        solved_filename.push(format!(
+            "{}.{}",
+            padding_id(front_problem_id),
+            lang.to_extension()
+        ));
+        if solved_filename.exists() {
+            return Ok(Some(solved_filename));
+        }
         let detail = self.get_question_detail(front_problem_id).await?;
         if let Some(question_detail) = detail {
             let problem = question_detail.to_problem();

@@ -10,11 +10,8 @@ use libc::c_char;
 
 // Open template with $EDITOR
 
-struct LibCUtil;
-
 /// wrappers around libc for unix like systems
-impl LibCUtil {
-    pub fn execvp(cmd: Vec<OsString>) {
+fn execvp(cmd: Vec<OsString>) {
         let cstrs: Vec<CString> = cmd
             .into_iter()
             .map(|arg| -> CString { unsafe { CString::from_vec_unchecked(arg.into_vec()) } })
@@ -26,7 +23,6 @@ impl LibCUtil {
             .collect();
 
         unsafe { libc::execvp(args[0], args.as_ptr()) };
-    }
 }
 
 const DEFAULT_EDITOR: &str = "vim";
@@ -41,5 +37,5 @@ pub fn open_with_editor<P: AsRef<Path>>(files: &[P]) {
         let path = p.as_ref();
         args.push(OsString::from(path));
     }
-    LibCUtil::execvp(args);
+    execvp(args);
 }

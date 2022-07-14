@@ -466,6 +466,7 @@ dependencies = [
  "indicatif",
  "lazy_static",
  "libc",
+ "ncurses-rs",
  "rand",
  "regex",
  "reqwest",
@@ -606,6 +607,12 @@ dependencies = [
  "security-framework-sys",
  "tempfile",
 ]
+
+[[package]]
+name = "ncurses-rs"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "301b59a7b36f58c5c2cfa297de442f0e432cbfc06b3b9b567c180df44c2ff92c"
 
 [[package]]
 name = "ntapi"

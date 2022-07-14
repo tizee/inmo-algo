@@ -130,10 +130,11 @@ inmo leetcode 1 --lang cpp --solve
 
 ### Codeforces
 
-WIP
+- [ ] fetch problems
+- [ ] fetch problems
 
 ## Acknowledgement
 
-There are similar projects:
+This project is inspired by:
 
 - [zcong1993/leetcode-tool](https://github.com/zcong1993/leetcode-tool)

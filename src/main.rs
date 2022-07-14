@@ -8,6 +8,7 @@ mod codeforces;
 mod common;
 mod config;
 mod leetcode;
+mod layout;
 
 use cli::App;
 use config::load_default_config;
