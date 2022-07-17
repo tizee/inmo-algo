@@ -92,8 +92,9 @@ impl Default for TreeViewStyle {
 }
 
 impl TreeView {
-    pub fn new(data: String, children: Option<Vec<TreeView>>) -> Self {
-        TreeView { data, children }
+    pub fn new<T: AsRef<str>>(data: T, children: Option<Vec<TreeView>>) -> Self {
+        let data = data.as_ref();
+        TreeView { data:data.to_string(), children }
     }
     // render tree by lines
     fn draw_node(
@@ -170,26 +171,26 @@ mod test_draw {
     use super::TreeView;
     #[test]
     fn test_foo() {
-        let mut root = TreeView::new("foo".to_string(), None);
+        let mut root = TreeView::new("foo", None);
         let mut children = Vec::new();
         for _ in 0..6 {
-            children.push(TreeView::new("foo".to_string(), None));
+            children.push(TreeView::new("foo", None));
         }
         let mut children2 = Vec::new();
         for _ in 0..3 {
-            children2.push(TreeView::new("foo".to_string(), None));
+            children2.push(TreeView::new("foo", None));
         }
         let mut children3 = Vec::new();
         for _ in 0..4 {
-            children3.push(TreeView::new("foo".to_string(), None));
+            children3.push(TreeView::new("foo", None));
         }
         let mut children4 = Vec::new();
         for _ in 0..4 {
-            children4.push(TreeView::new("foo".to_string(), None));
+            children4.push(TreeView::new("foo", None));
         }
         let mut children5 = Vec::new();
         for _ in 0..4 {
-            children5.push(TreeView::new("foo".to_string(), None));
+            children5.push(TreeView::new("foo", None));
         }
         children3[1].children = Some(children4);
         children[1].children = Some(children2);
