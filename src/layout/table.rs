@@ -7,6 +7,12 @@ pub struct Table {
     rows: Vec<Vec<String>>,
 }
 
+// TODO
+pub struct TableBox {
+    pub style: String,
+    pub content: String,
+}
+
 impl Table {
     pub fn new(headers: Vec<String>) -> Self {
         Table {
