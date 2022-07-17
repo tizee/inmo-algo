@@ -8,14 +8,14 @@ pub struct Table {
 }
 
 impl Table {
-    fn new(headers: Vec<String>) -> Self {
+    pub fn new(headers: Vec<String>) -> Self {
         Table {
             column_size: headers.len(),
             headers: headers.clone(),
             rows: vec![],
         }
     }
-    fn add_row(&mut self, row: Vec<String>) -> &mut Self {
+    pub fn add_row(&mut self, row: Vec<String>) -> &mut Self {
         assert!(row.len() == self.column_size);
         self.rows.push(row.clone());
         self

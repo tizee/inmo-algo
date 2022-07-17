@@ -1,10 +1,14 @@
+use std::ascii::AsciiExt;
 use std::fmt::Display;
+use std::str::FromStr;
+use std::string::ParseError;
 
 use anyhow::Result;
 use clap::{ArgEnum, Args, Subcommand};
 
 use crate::common;
 use crate::config::Config;
+use crate::layout::Table;
 use crate::leetcode::{LeetCode, ProblemEntry, SearchConditionBuilder};
 use common::Lang;
 
@@ -92,8 +96,28 @@ pub struct ListArgs {
     /// list local
     #[clap(long, multiple_occurrences = true)]
     pub topic: Option<Vec<String>>,
+    /// layout
+    #[clap(short, long)]
+    pub layout: Option<ListLayout>,
 }
 
+#[derive(Debug, Clone, Copy, ArgEnum)]
+pub enum ListLayout {
+    Table,
+    Tree,
+}
+
+impl FromStr for ListLayout {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let layout = &s.to_ascii_lowercase();
+        match layout.as_str() {
+            "table" => Ok(ListLayout::Table),
+            "tree" => Ok(ListLayout::Tree),
+            _ => Ok(ListLayout::Table),
+        }
+    }
+}
 impl LeetCodeArgs {
     pub async fn run(&self, config: &Config) -> Result<()> {
         let lc = LeetCode::new(config.leetcode.clone(), config.cache.clone());
@@ -130,13 +154,19 @@ impl LeetCodeArgs {
                     if let Some(q_list) = list {
                         for q in q_list.iter() {
                             let res = questions.iter().find(|p| {
-                                p.stat.question_title_slug.as_ref().unwrap().as_str()
+                                p.stat
+                                    .question_title_slug
+                                    .as_ref()
+                                    .unwrap()
+                                    .as_str()
                                     == q.title_slug.as_str()
                             });
                             if let Some(problem) = res {
                                 println!(
                                     "Level: {}\t {:04}.{}",
-                                    q.difficulty, problem.stat.frontend_question_id, q.title_slug
+                                    q.difficulty,
+                                    problem.stat.frontend_question_id,
+                                    q.title_slug
                                 );
                             }
                         }
@@ -196,39 +226,54 @@ impl LeetCodeArgs {
                     lc.pick_one(query).await?;
                 }
                 LeetCodeCmds::List(args) => {
+                    let layout =
+                        args.layout.unwrap_or_else(|| ListLayout::Table);
                     let mut todos = lc.todos().await?;
                     let mut todo_title = "Todos".to_string();
                     if let Some(ref topics) = args.topic {
                         todos = todos
                             .into_iter()
-                            .filter(|todo| todo.topics.iter().any(|topic| topics.contains(topic)))
+                            .filter(|todo| {
+                                todo.topics
+                                    .iter()
+                                    .any(|topic| topics.contains(topic))
+                            })
                             .collect();
-                        todo_title = todo_title.to_string() + " [ " + &topics.join(", ") + " ] ";
+                        todo_title = todo_title.to_string()
+                            + " [ "
+                            + &topics.join(", ")
+                            + " ] ";
                     }
                     let mut solved = lc.solutions().await?;
                     let mut solved_title = "Solved".to_string();
                     if let Some(ref topics) = args.topic {
                         solved = solved
                             .into_iter()
-                            .filter(|todo| todo.topics.iter().any(|topic| topics.contains(topic)))
+                            .filter(|todo| {
+                                todo.topics
+                                    .iter()
+                                    .any(|topic| topics.contains(topic))
+                            })
                             .collect();
-                        solved_title =
-                            solved_title.to_string() + " [ " + &topics.join(", ") + " ] ";
+                        solved_title = solved_title.to_string()
+                            + " [ "
+                            + &topics.join(", ")
+                            + " ] ";
                     }
                     if args.todo {
                         // list todo
-                        print_entries("Todos", todos);
+                        print_entries("Todos", todos, layout);
                         return Ok(());
                     }
                     if args.solved {
                         // list solved
-                        print_entries("Solved", solved);
+                        print_entries("Solved", solved, layout);
                         return Ok(());
                     }
                     if !args.todo && !args.solved {
                         // list todos and solutions
-                        print_entries(&todo_title, todos);
-                        print_entries(&solved_title, solved);
+                        print_entries(&todo_title, todos, layout);
+                        print_entries(&solved_title, solved, layout);
                     }
                 }
             }
@@ -237,17 +282,32 @@ impl LeetCodeArgs {
     }
 }
 
-#[inline]
-fn print_entries(title: &str, mut list: Vec<ProblemEntry>) {
+fn print_entries(title: &str, mut list: Vec<ProblemEntry>, layout: ListLayout) {
     println!();
     println!("==> {}", title);
     println!();
-    list.as_mut_slice().sort_by(|a, b| a.id.cmp(&b.id));
-    if !list.is_empty() {
-        for p in list.iter() {
-            println!("{}", p);
-        }
-    } else {
+    if list.is_empty() {
         println!("empty");
+        return;
+    }
+    list.as_mut_slice().sort_by(|a, b| a.id.cmp(&b.id));
+    match layout {
+        ListLayout::Tree => {
+            for p in list.iter() {
+                println!("{}", p.tree_layout());
+            }
+        }
+        ListLayout::Table => {
+            let mut table = Table::new(vec![
+                "FRONT ID".to_string(),
+                "LEVEL".to_string(),
+                "TITLE".to_string(),
+                "LANG".to_string(),
+            ]);
+            for p in list.iter() {
+                p.table_row(&mut table);
+            }
+            println!("{}", table.draw());
+        }
     }
 }

@@ -26,12 +26,14 @@ use std::process::{Command, Stdio};
 use fetcher::LCFetcher;
 use lazy_static::lazy_static;
 use problem::{
-    LCEdge, LCProblem, LCQuestionDetail, LCQuestionTopicTag, LCSimilarQuestion, LCTopicTag, Problem,
+    LCEdge, LCProblem, LCQuestionDetail, LCQuestionTopicTag, LCSimilarQuestion,
+    LCTopicTag, Problem,
 };
 use template::TemplateBuilder;
 
 use crate::common::Lang;
-use crate::common::TreeView;
+use crate::layout::Table;
+use crate::layout::TreeView;
 
 pub struct ProblemEntry {
     pub id: u32,
@@ -41,9 +43,8 @@ pub struct ProblemEntry {
     pub topics: Vec<String>,
 }
 
-// display for tree view
-impl Display for ProblemEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ProblemEntry {
+    pub fn tree_layout(&self) -> String {
         let langs_node = self
             .langs
             .iter()
@@ -53,7 +54,18 @@ impl Display for ProblemEntry {
             format!("{:04}\t{}\t{}", self.id, self.level, self.title),
             Some(langs_node),
         );
-        f.write_fmt(format_args!("{}", root.draw_default(2)))
+        root.draw_default(2)
+    }
+
+    pub fn table_row(&self, table: &mut Table) {
+        for lang in self.langs.iter() {
+            table.add_row(vec![
+                format!("{:04}", self.id),
+                self.level.to_string(),
+                self.title.to_string(),
+                lang.to_string(),
+            ]);
+        }
     }
 }
 
@@ -107,7 +119,11 @@ impl LeetCode {
 
     /// add problem to todo directory
     /// if the problem has been already added or solved, then it's a no-op
-    pub async fn add_todo(&self, front_problem_id: u32, lang: &Lang) -> Result<Option<PathBuf>> {
+    pub async fn add_todo(
+        &self,
+        front_problem_id: u32,
+        lang: &Lang,
+    ) -> Result<Option<PathBuf>> {
         let mut solved_filename = self.solved_dir();
         solved_filename.push(format!(
             "{}.{}",
@@ -204,20 +220,23 @@ impl LeetCode {
                 solution_file_path.display()
             );
 
-            fs::rename(&problem_file_path, &solution_file_path).context(format!(
-                "failed to rename {} to {}",
-                problem_file_path.display(),
-                solution_file_path.display()
-            ))?;
+            fs::rename(&problem_file_path, &solution_file_path).context(
+                format!(
+                    "failed to rename {} to {}",
+                    problem_file_path.display(),
+                    solution_file_path.display()
+                ),
+            )?;
             // update mod file for Rust lang
             if let Lang::Rust = lang {
                 let p_mod_file = todo_dir.join("mod.rs");
                 let removed = format!("mod {};", file_name);
-                let lines: Vec<String> = io::BufReader::new(File::open(&p_mod_file).unwrap())
-                    .lines()
-                    .map(|line| line.unwrap())
-                    .filter(|line| *line != removed)
-                    .collect();
+                let lines: Vec<String> =
+                    io::BufReader::new(File::open(&p_mod_file).unwrap())
+                        .lines()
+                        .map(|line| line.unwrap())
+                        .filter(|line| *line != removed)
+                        .collect();
                 fs::write(&p_mod_file, lines.join("\n")).context(format!(
                     "failed to update {} for {}",
                     p_mod_file.display(),
@@ -237,7 +256,10 @@ impl LeetCode {
         Ok(())
     }
 
-    async fn get_question_detail(&self, front_problem_id: u32) -> Result<Option<LCQuestionDetail>> {
+    async fn get_question_detail(
+        &self,
+        front_problem_id: u32,
+    ) -> Result<Option<LCQuestionDetail>> {
         let cache_problem = self.cache_problem(front_problem_id);
         let cache_problem_dir = self.cache_problem_dir();
         if !cache_problem_dir.exists() {
@@ -245,15 +267,17 @@ impl LeetCode {
         }
         let detail: Option<LCQuestionDetail>;
         if cache_problem.exists() {
-            detail = Some(storage::Storage::load_data_from_file(cache_problem)?);
+            detail =
+                Some(storage::Storage::load_data_from_file(cache_problem)?);
         } else {
             let list = self.get_questions().await?;
-            let problem = list
-                .iter()
-                .find(|&p| !p.paid_only && p.stat.frontend_question_id == front_problem_id);
+            let problem = list.iter().find(|&p| {
+                !p.paid_only && p.stat.frontend_question_id == front_problem_id
+            });
             if problem.is_some() {
                 let problem = problem.unwrap();
-                let title_slug = problem.stat.question_title_slug.clone().unwrap();
+                let title_slug =
+                    problem.stat.question_title_slug.clone().unwrap();
                 let resp = LCFetcher::download_problem(title_slug).await?;
                 storage::Storage::persist(cache_problem, &resp)?;
                 detail = Some(resp);
@@ -321,30 +345,40 @@ impl LeetCode {
     pub fn clear_cache(&self) -> Result<()> {
         let cache = self.cache_problem_list();
         if cache.exists() {
-            fs::remove_file(cache).with_context(|| "failed to clear cache for Leetcode")?;
+            fs::remove_file(cache)
+                .with_context(|| "failed to clear cache for Leetcode")?;
         }
         Ok(())
     }
 
-    fn add_todo_problem(&self, lang: &Lang, problem: &Problem) -> Result<PathBuf> {
+    fn add_todo_problem(
+        &self,
+        lang: &Lang,
+        problem: &Problem,
+    ) -> Result<PathBuf> {
         let todo_dir = self.todo_dir();
         if !todo_dir.exists() {
             fs::create_dir_all(&todo_dir)?;
         }
         let file_name = padding_id(problem.question_id);
-        let file_path = self
-            .todo_dir()
-            .join(format!("{}.{}", file_name, lang.to_extension()));
-        let solved_file_path =
-            self.solved_dir()
-                .join(format!("{}.{}", file_name, lang.to_extension()));
+        let file_path = self.todo_dir().join(format!(
+            "{}.{}",
+            file_name,
+            lang.to_extension()
+        ));
+        let solved_file_path = self.solved_dir().join(format!(
+            "{}.{}",
+            file_name,
+            lang.to_extension()
+        ));
         if solved_file_path.exists() {
             return Err(anyhow!(format!("{} is solved", problem.title)));
         }
         if !file_path.exists() {
             // template
             let template_file = TemplateBuilder::get_template_str(lang);
-            let solution_template = template::build_template(problem, lang, &template_file);
+            let solution_template =
+                template::build_template(problem, lang, &template_file);
 
             let mut file = fs::OpenOptions::new()
                 .write(true)
@@ -368,10 +402,12 @@ impl LeetCode {
                     .open(todo_dir.join("mod.rs"))
                     .unwrap();
 
-                writeln!(todo_mod_file, "mod {};", file_name).context(format!(
-                    "failed to update Rust lang mod file for {}",
-                    file_path.display()
-                ))?;
+                writeln!(todo_mod_file, "mod {};", file_name).context(
+                    format!(
+                        "failed to update Rust lang mod file for {}",
+                        file_path.display()
+                    ),
+                )?;
             }
         } else {
             println!("{} already added!!!", file_path.display());
@@ -379,7 +415,10 @@ impl LeetCode {
         Ok(file_path)
     }
 
-    pub async fn filter_problems(&self, query: &SearchCondition) -> Result<Vec<LCQuestionDetail>> {
+    pub async fn filter_problems(
+        &self,
+        query: &SearchCondition,
+    ) -> Result<Vec<LCQuestionDetail>> {
         if let Some(ref topics) = query.topics {
             let mut problems: Vec<LCQuestionDetail> = Vec::new();
             // get problems for each topics
@@ -413,7 +452,8 @@ impl LeetCode {
                 Ok(problems
                     .into_iter()
                     .filter_map(|p| {
-                        if p.difficulty.to_string().eq_ignore_ascii_case(level) {
+                        if p.difficulty.to_string().eq_ignore_ascii_case(level)
+                        {
                             return Some(p.to_detail());
                         }
                         None
@@ -427,10 +467,14 @@ impl LeetCode {
 
     /// pick one question based on conditions
     /// for the sake of simplicity, please use web UI to query with compliciated conditions
-    pub async fn pick_one(&self, query: SearchCondition) -> Result<Option<PathBuf>> {
+    pub async fn pick_one(
+        &self,
+        query: SearchCondition,
+    ) -> Result<Option<PathBuf>> {
         let matches = self.filter_problems(&query).await?;
         if !matches.is_empty() {
-            let random_index: usize = rand::thread_rng().gen_range(0..=matches.len());
+            let random_index: usize =
+                rand::thread_rng().gen_range(0..=matches.len());
             let question = &matches[random_index];
             let question_detail = self
                 .get_question_detail(
@@ -449,7 +493,9 @@ impl LeetCode {
                     detail.title_slug.as_ref().unwrap()
                 );
                 let problem = detail.to_problem();
-                return Ok(Some(self.add_todo_problem(&query.lang, &problem).unwrap()));
+                return Ok(Some(
+                    self.add_todo_problem(&query.lang, &problem).unwrap(),
+                ));
             }
         } else {
             eprintln!("There is no matched problem!");
@@ -458,7 +504,10 @@ impl LeetCode {
     }
 
     /// get tags of a question
-    pub async fn get_question_tags(&self, question_id: u32) -> Result<Option<Vec<String>>> {
+    pub async fn get_question_tags(
+        &self,
+        question_id: u32,
+    ) -> Result<Option<Vec<String>>> {
         let question = self.get_question_detail(question_id).await?;
         if let Some(detail) = question {
             return Ok(Some(
@@ -473,7 +522,9 @@ impl LeetCode {
         Ok(None)
     }
 
-    pub async fn get_all_tags(&self) -> Result<Vec<LCEdge<LCQuestionTopicTag>>> {
+    pub async fn get_all_tags(
+        &self,
+    ) -> Result<Vec<LCEdge<LCQuestionTopicTag>>> {
         let cache_file = self.cache_tags();
         if cache_file.exists() {
             lazy_static! {
@@ -495,7 +546,10 @@ impl LeetCode {
         }
     }
 
-    pub async fn get_problems_of_tag(&self, topic: &String) -> Result<LCTopicTag> {
+    pub async fn get_problems_of_tag(
+        &self,
+        topic: &String,
+    ) -> Result<LCTopicTag> {
         let cache_file = self.cache_tag_problems(topic);
         if cache_file.exists() {
             lazy_static! {
@@ -524,7 +578,8 @@ impl LeetCode {
         let q = self.get_question_detail(front_problem_id).await?;
         if let Some(detail) = q {
             if let Some(s_str) = detail.similar_questions {
-                let q_list = serde_json::from_str::<Vec<LCSimilarQuestion>>(&s_str)?;
+                let q_list =
+                    serde_json::from_str::<Vec<LCSimilarQuestion>>(&s_str)?;
                 return Ok(Some(q_list));
             }
         }
@@ -606,7 +661,9 @@ fn get_problem_files<P: AsRef<Path>>(p: P) -> Result<Vec<ProblemFileSet>> {
         for id in problem_set.iter() {
             let langs: Vec<Lang> = list
                 .iter()
-                .filter_map(|(i, lang)| if i == id { Some(lang.clone()) } else { None })
+                .filter_map(
+                    |(i, lang)| if i == id { Some(lang.clone()) } else { None },
+                )
                 .collect();
             res.push(ProblemFileSet { id: *id, langs });
         }
